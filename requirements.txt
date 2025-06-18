@@ -3,3 +3,5 @@ requests
 pandas
 python-dotenv
 tiktoken
+langchain
+langchain_community
