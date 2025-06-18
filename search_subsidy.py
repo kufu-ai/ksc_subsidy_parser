@@ -11,8 +11,8 @@ CITY_CSV_PATH = 'data/address/city.csv'
 TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
 
 # 用途ワードと支援ワード
-PURPOSE_WORDS = ["住宅", "土地", "リフォーム", "空き家"]
-SUPPORT_WORDS = ["補助金", "助成金", "給付金", "支援金", "奨励金"]
+PURPOSE_WORDS = ["住宅", "土地"]
+SUPPORT_WORDS = ["補助金"]
 
 
 def get_cities_by_prefecture(prefecture_name: str, city_csv_path: str = CITY_CSV_PATH):
