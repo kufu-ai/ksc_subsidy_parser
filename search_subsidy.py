@@ -59,17 +59,14 @@ def search_subsidy_urls(city: str, prefecture: str, max_results=20):
                 print("公式ドメインを使用します", domain)
                 query = f"{prefecture} {city} {purpose} {support} site:{domain}"
             else:
+                print("公式ドメインが見つかりませんでした")
                 query = f"{prefecture} {city} {purpose} {support} 公式"
             try:
                 results = tavily.invoke({"query": query, "max_results": max_results})
                 for r in results.get('results', []):
                     # 公式ドメインのみ抽出
                     url = r.get('url')
-                    if domain:
-                        if domain in url:
-                            urls.add(url)
-                    else:
-                        urls.add(url)
+                    urls.add(url)
                 time.sleep(1.0)  # API負荷軽減のため
             except Exception as e:
                 print(f"検索失敗: {query} ({e})")
