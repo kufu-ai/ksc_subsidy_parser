@@ -16,23 +16,71 @@ from html_fetcher import fetch_html
 from page_classifier import classify_page_type
 from pathlib import Path
 
-def extract_urls_from_html(html_content, base_url):
+def extract_urls_from_html(html_content, base_url, method="improved"):
     """
     HTMLからURLを抽出する
 
     Args:
         html_content (str): HTMLコンテンツ
         base_url (str): ベースURL
+        method (str): 抽出方法 ("simple", "improved", "openai")
 
     Returns:
         list: 抽出されたURL一覧
     """
+    if method == "openai":
+        # OpenAI APIを使用
+        try:
+            from smart_url_extractor import extract_urls_with_openai
+            result = extract_urls_with_openai(html_content, base_url)
+            return [url['url'] for url in result['subsidy_related_urls']]
+        except ImportError:
+            print("⚠️  OpenAI抽出機能が利用できません。improved方式を使用します。")
+            method = "improved"
+
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
-        urls = set()
 
-        # aタグからhref属性を抽出
-        for link in soup.find_all('a', href=True):
+        if method == "improved":
+            # ナビゲーション要素を除外
+            exclude_selectors = [
+                'nav', '.nav', '#nav', '.navigation',
+                'header', '.header', '#header',
+                'footer', '.footer', '#footer',
+                '.sidebar', '#sidebar', '.side',
+                '.breadcrumb', '.breadcrumbs',
+                '.menu', '.global-menu', '.site-menu',
+                '[role="navigation"]',
+                '.sns', '.social'
+            ]
+
+            # 除外要素を削除
+            for selector in exclude_selectors:
+                for element in soup.select(selector):
+                    element.decompose()
+
+            # メインコンテンツエリアを特定
+            main_content = None
+            for selector in ['main', '[role="main"]', '.main-content', '.content', '#content', '.main']:
+                main_element = soup.select_one(selector)
+                if main_element:
+                    main_content = main_element
+                    break
+
+            # メインコンテンツエリアから抽出
+            if main_content:
+                links = main_content.find_all('a', href=True)
+                print(f"    🎯 メインコンテンツから抽出: {len(links)}件")
+            else:
+                # メインコンテンツが見つからない場合は残りのsoupから
+                links = soup.find_all('a', href=True)
+                print(f"    📄 全体から抽出: {len(links)}件")
+        else:
+            # 従来の方式
+            links = soup.find_all('a', href=True)
+
+        urls = set()
+        for link in links:
             href = link.get('href')
             if href:
                 # 相対URLを絶対URLに変換
@@ -59,23 +107,30 @@ def filter_subsidy_related_urls(urls, keywords=None):
     if keywords is None:
         # 補助金関連のキーワード
         include_keywords = [
-            '補助', '助成', '支援', '交付', '給付', 'subsidy', 'grant', 'support',
-            '制度', '事業', '申請', '募集'
+            '補助', '助成', '支援', '交付', '給付', '奨励',
+            '制度', '事業', '申請', '募集', '対象', '要件',
+            'subsidy', 'grant', 'support', 'aid', 'assistance',
+            '住宅', '土地', '建設', '改修', '耐震', 'リフォーム'
         ]
 
         # 除外キーワード
         exclude_keywords = [
             'javascript:', 'mailto:', 'tel:', '#',
-            '.pdf', '.doc', '.xls', '.zip',
-            'facebook', 'twitter', 'instagram', 'youtube',
+            '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.csv',
+            'facebook', 'twitter', 'instagram', 'youtube', 'line',
             'login', 'admin', 'search', 'sitemap',
-            'privacy', 'contact', 'about'
+            'privacy', 'contact', 'about', 'access',
+            'rss', 'feed', 'print', 'mobile',
+            'cookie', 'policy', 'guide', 'help',
+            'inquiry', 'form', 'entry'
         ]
     else:
         include_keywords = keywords
         exclude_keywords = []
 
     filtered_urls = []
+    priority_urls = []  # 優先度の高いURL
+    secondary_urls = []  # 二次的なURL
 
     for url in urls:
         url_lower = url.lower()
@@ -84,17 +139,31 @@ def filter_subsidy_related_urls(urls, keywords=None):
         if any(keyword in url_lower for keyword in exclude_keywords):
             continue
 
+        # 同じページへの重複URLを除外（#付きなど）
+        if '#' in url and url.split('#')[0] in [u.split('#')[0] for u in filtered_urls]:
+            continue
+
         # 補助金関連キーワードが含まれるURLを優先
         if any(keyword in url_lower for keyword in include_keywords):
-            filtered_urls.append(url)
+            priority_urls.append(url)
         # 同じドメインのHTMLページも含める（相対URLなど）
         elif url_lower.startswith('http') and not any(ext in url_lower for ext in ['.pdf', '.doc', '.xls', '.zip']):
-            filtered_urls.append(url)
+            secondary_urls.append(url)
 
-    # 重複削除
-    return list(set(filtered_urls))
+    # 優先度順に結合
+    filtered_urls = priority_urls + secondary_urls
 
-def extract_and_classify_from_list_pages(classification_results, max_urls_per_page=50, delay=2):
+    # 重複削除（順序を保持）
+    seen = set()
+    unique_urls = []
+    for url in filtered_urls:
+        if url not in seen:
+            seen.add(url)
+            unique_urls.append(url)
+
+    return unique_urls
+
+def extract_and_classify_from_list_pages(classification_results, max_urls_per_page=50, delay=2, extraction_method="improved"):
     """
     一覧ページからURLを抽出して分類する
 
@@ -102,6 +171,7 @@ def extract_and_classify_from_list_pages(classification_results, max_urls_per_pa
         classification_results (list): 分類結果
         max_urls_per_page (int): 1ページあたりの最大URL数
         delay (int): API呼び出し間の待機時間（秒）
+        extraction_method (str): URL抽出方法 ("simple", "improved", "openai")
 
     Returns:
         dict: 抽出・分類結果
@@ -133,7 +203,7 @@ def extract_and_classify_from_list_pages(classification_results, max_urls_per_pa
             with open(html_path, 'r', encoding='utf-8') as f:
                 html_content = f.read()
 
-            extracted_urls = extract_urls_from_html(html_content, list_page['url'])
+            extracted_urls = extract_urls_from_html(html_content, list_page['url'], extraction_method)
             print(f"🔗 抽出された総URL数: {len(extracted_urls)}")
 
             # 補助金関連URLをフィルタリング
@@ -380,11 +450,24 @@ def main():
             print("❌ 分類結果が読み込めませんでした")
             return
 
+        # 抽出方法を選択
+        print("\nURL抽出方法を選択してください:")
+        print("1. 改良版BeautifulSoup（推奨・デフォルト）")
+        print("   - ナビゲーション・サイドバーを除外")
+        print("   - メインコンテンツエリアに特化")
+        print("2. 従来版BeautifulSoup（シンプル）")
+        print("3. OpenAI API（最高精度・コスト高）")
+
+        method_choice = input("選択 (1-3): ").strip() or "1"
+        method_map = {"1": "improved", "2": "simple", "3": "openai"}
+        extraction_method = method_map.get(method_choice, "improved")
+
         # 設定
         max_urls = int(input("1つの一覧ページから抽出する最大URL数 (デフォルト: 50): ") or "50")
         delay = int(input("API呼び出し間隔（秒、デフォルト: 2): ") or "2")
 
         print(f"\n🚀 処理開始...")
+        print(f"   - URL抽出方法: {extraction_method}")
         print(f"   - 最大URL数/ページ: {max_urls}")
         print(f"   - API呼び出し間隔: {delay}秒")
 
@@ -392,7 +475,8 @@ def main():
         results_data = extract_and_classify_from_list_pages(
             classification_results,
             max_urls_per_page=max_urls,
-            delay=delay
+            delay=delay,
+            extraction_method=extraction_method
         )
 
         # 結果を保存
