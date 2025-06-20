@@ -22,7 +22,8 @@ PAGE_CLASSIFICATION_PROMPT = """
    - 1つの具体的な補助金制度について詳しく説明している
    - 以下のいずれかの詳細情報が含まれている
      - 申請方法
-     - 対象者
+     - 対象
+     - 条件
      - 金額
      - 補助率
      - 期間
@@ -215,6 +216,9 @@ def save_classification_results(results, output_file):
         df.to_csv(output_file, index=False, encoding='utf-8')
         print(f"CSV保存完了: {output_file}")
 
+        # 個別ページのURLを抽出
+        extract_individual_page_urls(results, output_file)
+
         # 分類結果の統計を表示
         if results:
             page_types = [r.get('page_type', 'エラー') for r in results]
@@ -225,6 +229,48 @@ def save_classification_results(results, output_file):
 
     except Exception as e:
         print(f"保存エラー: {str(e)}")
+
+def extract_individual_page_urls(results, base_output_file):
+    """
+    個別ページのURLを抽出して別ファイルに保存する
+
+    Args:
+        results (list): 分類結果のリスト
+        base_output_file (str): ベースとなる出力ファイル名
+    """
+    try:
+        # 個別ページのみをフィルタリング
+        individual_pages = [r for r in results if r.get('page_type') == '個別ページ']
+
+        if not individual_pages:
+            print("個別ページが見つかりませんでした")
+            return
+
+        # 個別ページ用のファイル名を生成
+        individual_csv = base_output_file.replace('.csv', '_individual_pages.csv')
+        individual_json = base_output_file.replace('.csv', '_individual_pages.json')
+        individual_urls_txt = base_output_file.replace('.csv', '_individual_urls.txt')
+
+        # 詳細情報付きで保存（JSON）
+        with open(individual_json, 'w', encoding='utf-8') as f:
+            json.dump(individual_pages, f, ensure_ascii=False, indent=2)
+        print(f"個別ページ詳細保存完了: {individual_json}")
+
+        # 詳細情報付きで保存（CSV）
+        df_individual = pd.DataFrame(individual_pages)
+        df_individual.to_csv(individual_csv, index=False, encoding='utf-8')
+        print(f"個別ページ詳細保存完了: {individual_csv}")
+
+        # URLリストのみを保存（テキストファイル）
+        with open(individual_urls_txt, 'w', encoding='utf-8') as f:
+            for page in individual_pages:
+                f.write(f"{page.get('url', '')}\n")
+        print(f"個別ページURLリスト保存完了: {individual_urls_txt}")
+
+        print(f"\n✅ 個別ページ抽出完了: {len(individual_pages)}件")
+
+    except Exception as e:
+        print(f"個別ページ抽出エラー: {str(e)}")
 
 def main():
     """メイン処理"""
