@@ -6,3 +6,4 @@ tiktoken
 langchain
 langchain_community
 langchain-tavily
+beautifulsoup4
