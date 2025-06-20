@@ -60,21 +60,12 @@ def classify_page_type(url):
             html_content = html_content[:50000] + "..."
 
         # OpenAI APIでページを分析（構造化出力を使用）
-        response = client.chat.completions.create(
-            model="gpt-4.1-nano",
-            messages=[
-                {
-                    "role": "system",
-                    "content": PAGE_CLASSIFICATION_PROMPT
-                },
-                {
-                    "role": "user",
-                    "content": f"URL: {url}\n\n以下のHTMLコンテンツを分析してください：\n\n{html_content}"
-                }
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=f"システム指示: {PAGE_CLASSIFICATION_PROMPT}\n\nURL: {url}\n\n以下のHTMLコンテンツを分析してください：\n\n{html_content}",
+            text={
+                "format": {
+                    "type": "json_schema",
                     "name": "page_classification",
                     "strict": True,
                     "schema": {
@@ -116,12 +107,11 @@ def classify_page_type(url):
                     }
                 }
             },
-            max_tokens=1000,
             temperature=0.1
         )
 
-                # 構造化出力からJSONを取得
-        response_content = response.choices[0].message.content
+        # 構造化出力からJSONを取得
+        response_content = response.output[0].content[0].text
 
         # 構造化出力の場合、直接JSONとしてパース可能
         if response_content:

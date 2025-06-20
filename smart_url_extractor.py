@@ -98,21 +98,12 @@ def extract_urls_with_openai(html_content, base_url, max_content_length=40000):
             html_content += "\n...(コンテンツが長いため省略されました)"
 
         # OpenAI APIでURL抽出
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": URL_EXTRACTION_PROMPT
-                },
-                {
-                    "role": "user",
-                    "content": f"ベースURL: {base_url}\n\n以下のHTMLコンテンツから補助金関連URLを抽出してください：\n\n{html_content}"
-                }
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=f"システム指示: {URL_EXTRACTION_PROMPT}\n\nベースURL: {base_url}\n\n以下のHTMLコンテンツから補助金関連URLを抽出してください：\n\n{html_content}",
+            text={
+                "format": {
+                    "type": "json_schema",
                     "name": "url_extraction",
                     "strict": True,
                     "schema": {
@@ -148,12 +139,11 @@ def extract_urls_with_openai(html_content, base_url, max_content_length=40000):
                     }
                 }
             },
-            max_tokens=2000,
             temperature=0.1
         )
 
         # レスポンスをパース
-        response_content = response.choices[0].message.content
+        response_content = response.output[0].content[0].text
         result = json.loads(response_content)
 
         # URLを絶対URLに変換
