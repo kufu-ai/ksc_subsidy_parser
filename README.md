@@ -179,9 +179,14 @@ python test_smart_extractor.py
 python merge_classification_results.py
 ```
 
+### まとめて実行
+```sh
+python automated_prefecture_processor.py
+```
+
 ### URL抽出精度に関する注意点
 
-#### 改良版BeautifulSoup（推奨）
+#### BeautifulSoup
 - ✅ **無料で高精度**: ナビゲーション・サイドバーを自動除外
 - ✅ **処理速度が速い**: API呼び出し不要
 - ⚠️ **完璧ではない**: 複雑なサイト構造では一部ノイズが残る可能性
