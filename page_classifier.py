@@ -173,14 +173,14 @@ def classify_urls_from_file(json_file_path):
                 results.append(result)
 
                 # API負荷軽減のため待機
-                time.sleep(2)
+                time.sleep(5)
 
-                # 3つまでテスト（デバッグ用）
+                # TODO: 必要なくなったら消す。3つまでテスト（デバッグ用）
                 if i >= 3:
                     break
 
-            # 1つの市区町村だけテスト（デバッグ用）
-            break
+            # TODO: 必要なくなったら消す。1つの市区町村だけテスト（デバッグ用）
+            # break
 
         return results
 
