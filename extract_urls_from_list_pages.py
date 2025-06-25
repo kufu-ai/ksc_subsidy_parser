@@ -23,7 +23,7 @@ def extract_urls_from_html(html_content, base_url, method="improved"):
     Args:
         html_content (str): HTMLコンテンツ
         base_url (str): ベースURL
-        method (str): 抽出方法 ("simple", "improved", "openai")
+        method (str): 抽出方法 ("improved", "openai")
 
     Returns:
         list: 抽出されたURL一覧
@@ -41,43 +41,39 @@ def extract_urls_from_html(html_content, base_url, method="improved"):
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
 
-        if method == "improved":
-            # ナビゲーション要素を除外
-            exclude_selectors = [
-                'nav', '.nav', '#nav', '.navigation',
-                'header', '.header', '#header',
-                'footer', '.footer', '#footer',
-                '.sidebar', '#sidebar', '.side',
-                '.breadcrumb', '.breadcrumbs',
-                '.menu', '.global-menu', '.site-menu',
-                '[role="navigation"]',
-                '.sns', '.social'
-            ]
+        # ナビゲーション要素を除外
+        exclude_selectors = [
+            'nav', '.nav', '#nav', '.navigation',
+            'header', '.header', '#header',
+            'footer', '.footer', '#footer',
+            '.sidebar', '#sidebar', '.side',
+            '.breadcrumb', '.breadcrumbs',
+            '.menu', '.global-menu', '.site-menu',
+            '[role="navigation"]',
+            '.sns', '.social'
+        ]
 
-            # 除外要素を削除
-            for selector in exclude_selectors:
-                for element in soup.select(selector):
-                    element.decompose()
+        # 除外要素を削除
+        for selector in exclude_selectors:
+            for element in soup.select(selector):
+                element.decompose()
 
-            # メインコンテンツエリアを特定
-            main_content = None
-            for selector in ['main', '[role="main"]', '.main-content', '.content', '#content', '.main']:
-                main_element = soup.select_one(selector)
-                if main_element:
-                    main_content = main_element
-                    break
+        # メインコンテンツエリアを特定
+        main_content = None
+        for selector in ['main', '[role="main"]', '.main-content', '.content', '#content', '.main']:
+            main_element = soup.select_one(selector)
+            if main_element:
+                main_content = main_element
+                break
 
-            # メインコンテンツエリアから抽出
-            if main_content:
-                links = main_content.find_all('a', href=True)
-                print(f"    🎯 メインコンテンツから抽出: {len(links)}件")
-            else:
-                # メインコンテンツが見つからない場合は残りのsoupから
-                links = soup.find_all('a', href=True)
-                print(f"    📄 全体から抽出: {len(links)}件")
+        # メインコンテンツエリアから抽出
+        if main_content:
+            links = main_content.find_all('a', href=True)
+            print(f"    🎯 メインコンテンツから抽出: {len(links)}件")
         else:
-            # 従来の方式
+            # メインコンテンツが見つからない場合は残りのsoupから
             links = soup.find_all('a', href=True)
+            print(f"    📄 全体から抽出: {len(links)}件")
 
         urls = set()
         for link in links:
@@ -171,7 +167,7 @@ def extract_and_classify_from_list_pages(classification_results, max_urls_per_pa
         classification_results (list): 分類結果
         max_urls_per_page (int): 1ページあたりの最大URL数
         delay (int): API呼び出し間の待機時間（秒）
-        extraction_method (str): URL抽出方法 ("simple", "improved", "openai")
+        extraction_method (str): URL抽出方法 ("improved", "openai")
 
     Returns:
         dict: 抽出・分類結果
@@ -455,11 +451,10 @@ def main():
         print("1. 改良版BeautifulSoup（推奨・デフォルト）")
         print("   - ナビゲーション・サイドバーを除外")
         print("   - メインコンテンツエリアに特化")
-        print("2. 従来版BeautifulSoup（シンプル）")
-        print("3. OpenAI API（最高精度・コスト高）")
+        print("2. OpenAI API（最高精度・コスト高）")
 
-        method_choice = input("選択 (1-3): ").strip() or "1"
-        method_map = {"1": "improved", "2": "simple", "3": "openai"}
+        method_choice = input("選択 (1-2): ").strip() or "1"
+        method_map = {"1": "improved", "2": "openai"}
         extraction_method = method_map.get(method_choice, "improved")
 
         # 設定
