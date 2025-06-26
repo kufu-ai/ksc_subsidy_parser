@@ -21,7 +21,7 @@ from datetime import datetime
 
 # 必要なモジュールをインポート
 from search_subsidy import get_cities_by_prefecture, search_subsidy_urls, get_flexible_city_name, get_official_domain
-from page_classifier import classify_urls_from_file, save_classification_results, extract_individual_page_urls
+from page_classifier import classify_urls_from_file, save_classification_results
 from extract_urls_from_list_pages import extract_and_classify_from_list_pages, save_extraction_results, load_classification_results
 from merge_classification_results import merge_classification_results, create_comprehensive_summary, save_merged_results
 
@@ -164,7 +164,7 @@ def step1_search_subsidy_urls(prefecture_name, settings):
 
             result_list.append({
                 "都道府県名": prefecture_name,
-                "市区町村名": city,
+                "city_name": city,
                 "補助金関連URL": urls
             })
             total_urls += len(urls)
@@ -215,13 +215,8 @@ def step2_classify_pages(search_file, settings):
 
         # 結果を保存
         base_filename = Path(search_file).stem
-        output_csv = f"{base_filename}_page_classification.csv"
-        save_classification_results(classification_results, output_csv)
-
-        # 個別ページも抽出
-        extract_individual_page_urls(classification_results, output_csv)
-
         output_file = f"{base_filename}_page_classification.json"
+        save_classification_results(classification_results, output_file)
 
         # 統計
         page_types = {}
@@ -245,6 +240,8 @@ def step2_classify_pages(search_file, settings):
 def step3_extract_from_list_pages(classification_file, settings):
     """
     ステップ3: 一覧ページからURL抽出
+    found_new_housing_subsidiesを使用
+    さらにリンク先が一覧ページの場合は無視する。
     """
     try:
         # 分類結果を読み込み
@@ -256,25 +253,90 @@ def step3_extract_from_list_pages(classification_file, settings):
                 'error': '分類結果の読み込みに失敗'
             }
 
-        # 抽出方法を設定
-        extraction_method = "openai" if settings['use_openai_for_extraction'] else "improved"
+        # 一覧ページかつfound_new_housing_subsidiesが存在するページを抽出
+        list_pages_with_subsidies = []
+        for result in classification_results:
+            if (result.get('page_type') == '新築住宅関連一覧ページ' and
+                result.get('found_new_housing_subsidies') and
+                len(result.get('found_new_housing_subsidies', [])) > 0):
+                list_pages_with_subsidies.append(result)
 
-        # URL抽出・分類実行
-        extraction_data = extract_and_classify_from_list_pages(
-            classification_results,
-            max_urls_per_page=settings['max_urls_per_list_page'],
-            delay=settings['extraction_delay'],
-            extraction_method=extraction_method
-        )
+        if not list_pages_with_subsidies:
+            print("❌ 補助金が見つかった一覧ページがありませんでした")
+            return {
+                'success': False,
+                'error': '補助金が見つかった一覧ページが存在しません'
+            }
+
+        print(f"📋 補助金発見済み一覧ページ数: {len(list_pages_with_subsidies)}")
+
+        all_extracted_results = []
+        total_extracted_urls = 0
+
+        for i, list_page in enumerate(list_pages_with_subsidies, 1):
+            print(f"\n{'='*60}")
+            print(f"📄 一覧ページ {i}/{len(list_pages_with_subsidies)}: {list_page.get('url', '')}")
+            print(f"🏛️ {list_page.get('prefecture', '')} {list_page.get('city', '')}")
+
+            found_subsidies = list_page.get('found_new_housing_subsidies', [])
+            print(f"🔗 発見済み補助金数: {len(found_subsidies)}")
+            print(f"{'='*60}")
+
+            # found_new_housing_subsidiesから各URLを分類
+            for j, subsidy_info in enumerate(found_subsidies, 1):
+                url = subsidy_info.get('url', '')
+                title = subsidy_info.get('title', '')
+
+                if not url:
+                    print(f"  ⚠️  {j}/{len(found_subsidies)}: URLが空のためスキップ - {title}")
+                    continue
+
+                print(f"  🔍 {j}/{len(found_subsidies)}: {title}")
+                print(f"      URL: {url[:80]}...")
+
+                try:
+                    # URLを分類（page_classifier.pyのclassify_page_typeを使用）
+                    from page_classifier import classify_page_type
+                    classification_result = classify_page_type(url)
+
+                    # 元の一覧ページ情報を追加
+                    classification_result.update({
+                        'parent_list_page_url': list_page['url'],
+                        'parent_prefecture': list_page.get('prefecture', ''),
+                        'parent_city': list_page.get('city', ''),
+                        'subsidy_title_from_list': title,
+                        'extraction_order': j,
+                        'extracted_from_list': True
+                    })
+
+                    all_extracted_results.append(classification_result)
+                    total_extracted_urls += 1
+
+                    print(f"    📝 判定: {classification_result.get('page_type', '不明')} (確信度: {classification_result.get('confidence', 0.0):.2f})")
+
+                    # API負荷軽減のため待機
+                    time.sleep(settings['extraction_delay'])
+
+                except Exception as e:
+                    print(f"    ❌ 分類エラー: {str(e)}")
+                    continue
+
+        # 統計情報を作成
+        statistics = create_extraction_statistics_from_found_subsidies(all_extracted_results, list_pages_with_subsidies)
 
         # 結果を保存
         base_filename = Path(classification_file).stem
-        save_extraction_results(extraction_data, base_filename)
+        save_extraction_results_from_found_subsidies(all_extracted_results, statistics, base_filename)
 
         return {
             'success': True,
-            'data': extraction_data,
-            'total_extracted': extraction_data['total_extracted_urls']
+            'data': {
+                'extracted_results': all_extracted_results,
+                'statistics': statistics,
+                'total_list_pages': len(list_pages_with_subsidies),
+                'total_extracted_urls': total_extracted_urls
+            },
+            'total_extracted': total_extracted_urls
         }
 
     except Exception as e:
@@ -282,6 +344,94 @@ def step3_extract_from_list_pages(classification_file, settings):
             'success': False,
             'error': str(e)
         }
+
+def create_extraction_statistics_from_found_subsidies(extracted_results, original_list_pages):
+    """
+    found_new_housing_subsidiesからの抽出結果統計を作成
+    """
+    stats = {
+        'total_extracted': len(extracted_results),
+        'by_page_type': {},
+        'by_prefecture': {},
+        'individual_pages_found': 0,
+        'confidence_stats': {},
+        'original_list_pages': len(original_list_pages)
+    }
+
+    # ページタイプ別統計
+    for result in extracted_results:
+        page_type = result.get('page_type', '不明')
+        stats['by_page_type'][page_type] = stats['by_page_type'].get(page_type, 0) + 1
+
+    # 都道府県別統計
+    for result in extracted_results:
+        pref = result.get('parent_prefecture', '不明')
+        stats['by_prefecture'][pref] = stats['by_prefecture'].get(pref, 0) + 1
+
+    # 個別ページ数（新築住宅関連個別ページ）
+    stats['individual_pages_found'] = stats['by_page_type'].get('新築住宅関連個別ページ', 0)
+
+    # 確信度統計
+    confidences = [r.get('confidence', 0.0) for r in extracted_results if r.get('confidence') is not None]
+    if confidences:
+        stats['confidence_stats'] = {
+            'average': sum(confidences) / len(confidences),
+            'max': max(confidences),
+            'min': min(confidences)
+        }
+
+    return stats
+
+def save_extraction_results_from_found_subsidies(extracted_results, statistics, base_filename):
+    """
+    found_new_housing_subsidiesからの抽出結果を保存
+    """
+    try:
+        # すべての結果を保存
+        all_results_file = f"{base_filename}_extracted_all.json"
+        with open(all_results_file, 'w', encoding='utf-8') as f:
+            json.dump(extracted_results, f, ensure_ascii=False, indent=2)
+        print(f"✅ 全抽出結果保存: {all_results_file}")
+
+        # 個別ページのみを抽出
+        individual_pages = [r for r in extracted_results if r.get('page_type') == '新築住宅関連個別ページ']
+
+        if individual_pages:
+            # 個別ページURLリスト
+            individual_urls_file = f"{base_filename}_extracted_individual_urls.txt"
+            with open(individual_urls_file, 'w', encoding='utf-8') as f:
+                for page in individual_pages:
+                    f.write(f"{page.get('url', '')}\n")
+            print(f"✅ 抽出個別ページURLリスト: {individual_urls_file} ({len(individual_pages)}件)")
+
+            # 個別ページ詳細
+            individual_detailed_file = f"{base_filename}_extracted_individual_detailed.json"
+            with open(individual_detailed_file, 'w', encoding='utf-8') as f:
+                json.dump(individual_pages, f, ensure_ascii=False, indent=2)
+            print(f"✅ 抽出個別ページ詳細: {individual_detailed_file}")
+
+        # 統計情報を保存
+        stats_file = f"{base_filename}_extraction_stats.json"
+        with open(stats_file, 'w', encoding='utf-8') as f:
+            json.dump(statistics, f, ensure_ascii=False, indent=2)
+        print(f"✅ 統計情報保存: {stats_file}")
+
+        # 統計表示
+        print(f"\n📊 抽出統計:")
+        print(f"  - 処理対象一覧ページ数: {statistics['original_list_pages']}")
+        print(f"  - 総抽出URL数: {statistics['total_extracted']}")
+        print(f"  - 新築住宅関連個別ページ数: {statistics['individual_pages_found']}")
+
+        if statistics.get('confidence_stats'):
+            conf_stats = statistics['confidence_stats']
+            print(f"  - 平均確信度: {conf_stats['average']:.2f}")
+
+        print(f"\n📄 ページタイプ別:")
+        for page_type, count in statistics['by_page_type'].items():
+            print(f"  - {page_type}: {count}件")
+
+    except Exception as e:
+        print(f"❌ 保存エラー: {str(e)}")
 
 def step4_merge_results(classification_file, extraction_data, base_filename, settings):
     """
