@@ -22,9 +22,9 @@ def merge_classification_results(original_results, extracted_results):
     Returns:
         dict: マージされた結果
     """
-    # 個別ページのみを抽出
-    original_individual = [r for r in original_results if r.get('page_type') == '個別ページ']
-    extracted_individual = [r for r in extracted_results if r.get('page_type') == '個別ページ']
+    # 個別ページのみを抽出（新スキーマのみ）
+    original_individual = [r for r in original_results if r.get('page_type') == '新築住宅関連個別ページ']
+    extracted_individual = [r for r in extracted_results if r.get('page_type') == '新築住宅関連個別ページ']
 
     # 元の個別ページにソース情報を追加
     for page in original_individual:
