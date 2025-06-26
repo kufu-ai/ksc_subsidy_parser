@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
+import re
 
 def merge_classification_results(original_results, extracted_results):
     """
@@ -214,6 +215,47 @@ def save_merged_results(merged_data, comprehensive_summary, base_filename):
     with open(stats_file, 'w', encoding='utf-8') as f:
         json.dump(stats_data, f, ensure_ascii=False, indent=2)
     print(f"✅ 統計情報: {stats_file}")
+
+    # 都道府県→市区町村→URLリスト（タイトル付き）形式のJSON出力
+    # TODO: 内容の要約時に使用するようにする。prefectureとcityが機械的に判断できるようになるのでAIによる間違えが起こらないくなる。
+    # individual_pagesを都道府県・市区町村ごとにまとめる
+    pref_city_dict = {}
+    for page in individual_pages:
+        pref = page.get('prefecture') or page.get('parent_prefecture', '不明')
+        city = page.get('city') or page.get('parent_city', '不明')
+        # URLとタイトルのリストを作成
+        urls = []
+        # found_new_housing_subsidiesがあればそのtitle/url、なければpage_title
+        if page.get('found_new_housing_subsidies'):
+            for sub in page['found_new_housing_subsidies']:
+                urls.append({
+                    'url': sub.get('url', page.get('url', '')),
+                    'title': sub.get('title', page.get('page_title', ''))
+                })
+        else:
+            urls.append({
+                'url': page.get('url', ''),
+                'title': page.get('page_title', '')
+            })
+        # 既存の市区町村エントリを探す
+        if pref not in pref_city_dict:
+            pref_city_dict[pref] = []
+        # city_nameが既にあればurlsを追加、なければ新規
+        found = False
+        for city_entry in pref_city_dict[pref]:
+            if city_entry['city_name'] == city:
+                city_entry['urls'].extend(urls)
+                found = True
+                break
+        if not found:
+            pref_city_dict[pref].append({
+                'city_name': city,
+                'urls': urls
+            })
+    city_urls_json_file = f"{base_filename}_merged_city_urls.json"
+    with open(city_urls_json_file, 'w', encoding='utf-8') as f:
+        json.dump(pref_city_dict, f, ensure_ascii=False, indent=2)
+    print(f"✅ 都道府県→市区町村→URLリストJSON: {city_urls_json_file}")
 
 def print_merge_statistics(merged_data, comprehensive_summary):
     """
