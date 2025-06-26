@@ -122,12 +122,12 @@ def get_official_domain(city: str, prefecture: str, site_csv_path=SITE_CSV_PATH)
         print(f"ドメイン取得エラー: {str(e)}")
         return None
 
-def search_subsidy_urls(city: str, prefecture: str, max_results=20):
+def search_subsidy_urls(city: str, prefecture: str, max_results=10):
     """
     市区町村名・都道府県名・用途ワード・支援ワードの組み合わせでTavily検索し、URLリストを返す
     公式ドメインがあればsite:で絞り込む（get_flexible_city_nameを使用）
     """
-    tavily = TavilySearch(api_key=TAVILY_API_KEY)
+    tavily = TavilySearch(api_key=TAVILY_API_KEY, max_results=max_results)
     urls = set()
 
     # 柔軟マッチングで正式名称を取得
@@ -137,17 +137,18 @@ def search_subsidy_urls(city: str, prefecture: str, max_results=20):
 
     # 正式名称で公式ドメインを取得
     domain = get_official_domain(formal_city_name, prefecture)
+    minus_query = '-filetype:pdf'
 
     for purpose in PURPOSE_WORDS:
         for support in SUPPORT_WORDS:
             if domain:
                 print(f"    🌐 公式ドメインを使用: {domain}")
-                query = f"{prefecture} {formal_city_name} {purpose} {support} site:{domain}"
+                query = f"{purpose} {support} site:{domain} {minus_query}"
             else:
                 print(f"    🔍 公式ドメイン未発見、一般検索を実行")
-                query = f"{prefecture} {formal_city_name} {purpose} {support} 公式"
+                query = f"{prefecture} {formal_city_name} {purpose} {support} 公式 {minus_query}"
             try:
-                results = tavily.invoke({"query": query, "max_results": max_results})
+                results = tavily.invoke({"query": query})
                 for r in results.get('results', []):
                     url = r.get('url')
                     if url:

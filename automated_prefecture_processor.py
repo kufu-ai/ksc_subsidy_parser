@@ -39,7 +39,7 @@ def process_prefecture(prefecture_name, settings=None):
     # デフォルト設定
     default_settings = {
         'max_cities': None,  # None = 全市区町村
-        'max_urls_per_city': 20,
+        'max_urls_per_city': 10,
         'max_urls_per_list_page': 50,
         'classification_delay': 5,
         'extraction_delay': 5,  # デフォルトを5秒に変更
@@ -157,26 +157,27 @@ def step1_search_subsidy_urls(prefecture_name, settings):
         total_urls = 0
 
         for i, city in enumerate(cities, 1):
-            print(f"  {i}/{len(cities)}: {city} を検索中...")
+            if city == "千葉市" or city == "銚子市":
+                print(f"  {i}/{len(cities)}: {city} を検索中...")
 
-            # search_subsidy_urls内で柔軟マッチング処理される
-            urls = search_subsidy_urls(city, prefecture_name, max_results=settings['max_urls_per_city'])
+                # search_subsidy_urls内で柔軟マッチング処理される
+                urls = search_subsidy_urls(city, prefecture_name, max_results=settings['max_urls_per_city'])
 
-            result_list.append({
-                "都道府県名": prefecture_name,
-                "city_name": city,
-                "補助金関連URL": urls
-            })
-            total_urls += len(urls)
-            print(f"    📍 {len(urls)}件のURLを取得")
+                result_list.append({
+                    "都道府県名": prefecture_name,
+                    "city_name": city,
+                    "補助金関連URL": urls
+                })
+                total_urls += len(urls)
+                print(f"    📍 {len(urls)}件のURLを取得")
 
-            # API負荷軽減
-            time.sleep(1)
+                # API負荷軽減
+                time.sleep(1)
 
-            #TODO: kesu 開発中は2件でスキップ
-            if i >= 2:
-                print(f"    ⚠️  開発モード: {i}件で処理を停止")
-                break
+                #TODO: kesu 開発中は2件でスキップ
+                # if i >= 2:
+                #     print(f"    ⚠️  開発モード: {i}件で処理を停止")
+                #     break
 
         # 結果を保存
         output_json = f"{prefecture_name}_subsidy_urls.json"

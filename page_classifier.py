@@ -73,8 +73,8 @@ def classify_page_type(url):
         # HTMLを取得
         filename = f"page_classify_{int(time.time())}.html"
         # PDFファイルの場合は処理をスキップ
-        if url.lower().endswith('.pdf'):
-            print(f"⚠️ PDFファイルのためスキップします: {url}")
+        if url.lower().endswith('.pdf') or url.lower().endswith('.pptx') or url.lower().endswith('.docx') or url.lower().endswith('.xlsx'):
+            print(f"⚠️ 非対応のファイル(PDF, PPTX, DOCX, XLSX)のためスキップします: {url}")
             return {
                 "page_type": "関連なし",
                 "confidence": 0.0,
@@ -231,8 +231,8 @@ def classify_urls_from_file(json_file_path):
                 time.sleep(5)
 
                 # TODO: 必要なくなったら消す。3つまでテスト（デバッグ用）
-                if i >= 3:
-                    break
+                # if i >= 3:
+                #     break
 
             # TODO: 必要なくなったら消す。1つの市区町村だけテスト（デバッグ用）
             # break
