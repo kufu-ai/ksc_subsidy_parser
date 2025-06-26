@@ -72,6 +72,17 @@ def classify_page_type(url):
     try:
         # HTMLを取得
         filename = f"page_classify_{int(time.time())}.html"
+        # PDFファイルの場合は処理をスキップ
+        if url.lower().endswith('.pdf'):
+            print(f"⚠️ PDFファイルのためスキップします: {url}")
+            return {
+                "page_type": "関連なし",
+                "confidence": 0.0,
+                "reasoning": "PDFファイルのため分析対象外",
+                "found_new_housing_subsidies": [],
+                "url": url
+            }
+
         html_path = fetch_html(url, filename)
 
         # HTMLファイルの内容を読み込む
