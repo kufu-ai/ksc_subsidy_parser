@@ -15,18 +15,35 @@ TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
 PURPOSE_WORDS = ["住宅", "土地"]
 SUPPORT_WORDS = ["補助金"]
 
+# prefecture_idから都道府県名への対応辞書
+PREFECTURE_MAP = {
+    1: '北海道', 2: '青森県', 3: '岩手県', 4: '宮城県', 5: '秋田県', 6: '山形県', 7: '福島県',
+    8: '茨城県', 9: '栃木県', 10: '群馬県', 11: '埼玉県', 12: '千葉県', 13: '東京都', 14: '神奈川県',
+    15: '新潟県', 16: '富山県', 17: '石川県', 18: '福井県', 19: '山梨県', 20: '長野県', 21: '岐阜県',
+    22: '静岡県', 23: '愛知県', 24: '三重県', 25: '滋賀県', 26: '京都府', 27: '大阪府', 28: '兵庫県',
+    29: '奈良県', 30: '和歌山県', 31: '鳥取県', 32: '島根県', 33: '岡山県', 34: '広島県', 35: '山口県',
+    36: '徳島県', 37: '香川県', 38: '愛媛県', 39: '高知県', 40: '福岡県', 41: '佐賀県', 42: '長崎県',
+    43: '熊本県', 44: '大分県', 45: '宮崎県', 46: '鹿児島県', 47: '沖縄県'
+}
+
 def get_cities_by_prefecture(prefecture_name: str, city_csv_path: str = CITY_CSV_PATH):
     """
     指定した都道府県名に属する市区町村名リストを返す（正式名称のみ）
     """
     df = pd.read_csv(city_csv_path)
-    # 都道府県名のカラム名はcsvの内容に合わせて修正してください
-    # 例: '都道府県名', '市区町村名'
-    if '都道府県名' not in df.columns or '市区町村名' not in df.columns:
-        raise ValueError('city.csvのカラム名が想定と異なります')
 
-    # 正式名称のみを返す（重複除去）
-    cities = df[df['都道府県名'] == prefecture_name]['市区町村名'].unique().tolist()
+    # prefecture_idを都道府県名から逆引き
+    prefecture_id = None
+    for pid, pname in PREFECTURE_MAP.items():
+        if pname == prefecture_name:
+            prefecture_id = pid
+            break
+
+    if prefecture_id is None:
+        raise ValueError(f'都道府県名 "{prefecture_name}" が見つかりません')
+
+    # 指定した都道府県の市区町村名を取得（重複除去）
+    cities = df[df['prefecture_id'] == prefecture_id]['city_name'].unique().tolist()
     return cities
 
 def get_flexible_city_name(input_city: str, prefecture_name: str, city_csv_path: str = CITY_CSV_PATH):
@@ -43,8 +60,18 @@ def get_flexible_city_name(input_city: str, prefecture_name: str, city_csv_path:
     """
     df = pd.read_csv(city_csv_path)
 
+    # prefecture_idを都道府県名から逆引き
+    prefecture_id = None
+    for pid, pname in PREFECTURE_MAP.items():
+        if pname == prefecture_name:
+            prefecture_id = pid
+            break
+
+    if prefecture_id is None:
+        return input_city
+
     # その都道府県の全市区町村を取得
-    prefecture_cities = df[df['都道府県名'] == prefecture_name]['市区町村名'].unique()
+    prefecture_cities = df[df['prefecture_id'] == prefecture_id]['city_name'].unique()
 
     # 1. 完全一致を確認
     if input_city in prefecture_cities:
@@ -138,16 +165,16 @@ def main():
     result_list = []
     for city in cities:
         urls = search_subsidy_urls(city, prefecture)
-        result_list.append({"都道府県名": prefecture, "市区町村名": city, "補助金関連URL": urls})
+        result_list.append({"都道府県名": prefecture, "city_name": city, "補助金関連URL": urls})
         print(f"{city}: {len(urls)}件のURLを取得")
         # TODO: 最後・通しのチェックの時は消す
         # 2件取得したら終了 リミット来ないように
-        # if len(result_list) >= 2:
-        #     break
+        if len(result_list) >= 2:
+            break
     # 結果をCSV/JSONで保存
     df_result = pd.DataFrame(result_list)
     df_result.to_json(f"{prefecture}_subsidy_urls.json", force_ascii=False, orient="records", indent=2)
-    df_result.to_csv(f"{prefecture}_subsidy_urls.csv", index=False)
+    # df_result.to_csv(f"{prefecture}_subsidy_urls.csv", index=False)
     print(f"保存完了: {prefecture}_subsidy_urls.json, {prefecture}_subsidy_urls.csv")
 
 if __name__ == '__main__':
