@@ -262,10 +262,20 @@ def step3_extract_from_list_pages(classification_file, settings):
                 list_pages_with_subsidies.append(result)
 
         if not list_pages_with_subsidies:
-            print("❌ 補助金が見つかった一覧ページがありませんでした")
+            print("⚠️ 補助金が見つかった一覧ページがありませんでした")
+            all_extracted_results = []
+            statistics = create_extraction_statistics_from_found_subsidies(all_extracted_results, [])
+            base_filename = Path(classification_file).stem
+            save_extraction_results_from_found_subsidies(all_extracted_results, statistics, base_filename)
             return {
-                'success': False,
-                'error': '補助金が見つかった一覧ページが存在しません'
+                'success': True,
+                'data': {
+                    'extracted_results': all_extracted_results,
+                    'statistics': statistics,
+                    'total_list_pages': 0,
+                    'total_extracted_urls': 0
+                },
+                'total_extracted': 0
             }
 
         print(f"📋 補助金発見済み一覧ページ数: {len(list_pages_with_subsidies)}")
