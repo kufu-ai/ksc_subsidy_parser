@@ -112,7 +112,7 @@ def classify_page_type(url):
 
         # OpenAI APIでページを分析（構造化出力を使用）
         response = client.responses.create(
-            model="gpt-4.1",
+            model="gpt-4o-mini",
             input=f"システム指示: {PAGE_CLASSIFICATION_PROMPT}\n\nURL: {url}\n\n以下のHTMLコンテンツを分析してください：\n\n{html_content}",
             text={
                 "format": {
