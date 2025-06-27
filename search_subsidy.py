@@ -137,6 +137,7 @@ def search_subsidy_urls(city: str, prefecture: str, max_results=10):
 
     # 正式名称で公式ドメインを取得
     domain = get_official_domain(formal_city_name, prefecture)
+    # 複数指定したいがうまく取得できないので比較的多いpdfのみ除外
     minus_query = '-filetype:pdf'
 
     for purpose in PURPOSE_WORDS:
