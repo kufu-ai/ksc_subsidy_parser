@@ -257,7 +257,7 @@ def step3_extract_from_list_pages(classification_file, settings):
         # 一覧ページかつfound_new_housing_subsidiesが存在するページを抽出
         list_pages_with_subsidies = []
         for result in classification_results:
-            if (result.get('page_type') == '新築住宅関連一覧ページ' and
+            if (result.get('page_type') == '住宅関連一覧ページ' and
                 result.get('found_new_housing_subsidies') and
                 len(result.get('found_new_housing_subsidies', [])) > 0):
                 list_pages_with_subsidies.append(result)
@@ -379,8 +379,8 @@ def create_extraction_statistics_from_found_subsidies(extracted_results, origina
         pref = result.get('parent_prefecture', '不明')
         stats['by_prefecture'][pref] = stats['by_prefecture'].get(pref, 0) + 1
 
-    # 個別ページ数（新築住宅関連個別ページ）
-    stats['individual_pages_found'] = stats['by_page_type'].get('新築住宅関連個別ページ', 0)
+    # 個別ページ数（住宅関連個別ページ）
+    stats['individual_pages_found'] = stats['by_page_type'].get('住宅関連個別ページ', 0)
 
     # 確信度統計
     confidences = [r.get('confidence', 0.0) for r in extracted_results if r.get('confidence') is not None]
@@ -405,7 +405,7 @@ def save_extraction_results_from_found_subsidies(extracted_results, statistics, 
         print(f"✅ 全抽出結果保存: {all_results_file}")
 
         # 個別ページのみを抽出
-        individual_pages = [r for r in extracted_results if r.get('page_type') == '新築住宅関連個別ページ']
+        individual_pages = [r for r in extracted_results if r.get('page_type') == '住宅関連個別ページ']
 
         if individual_pages:
             # 個別ページURLリスト
@@ -431,7 +431,7 @@ def save_extraction_results_from_found_subsidies(extracted_results, statistics, 
         print(f"\n📊 抽出統計:")
         print(f"  - 処理対象一覧ページ数: {statistics['original_list_pages']}")
         print(f"  - 総抽出URL数: {statistics['total_extracted']}")
-        print(f"  - 新築住宅関連個別ページ数: {statistics['individual_pages_found']}")
+        print(f"  - 住宅関連個別ページ数: {statistics['individual_pages_found']}")
 
         if statistics.get('confidence_stats'):
             conf_stats = statistics['confidence_stats']
