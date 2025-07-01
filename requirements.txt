@@ -5,6 +5,6 @@ python-dotenv
 tiktoken
 langchain
 langchain_community
-langchain-tavily
+google-api-python-client
 beautifulsoup4
 playwright

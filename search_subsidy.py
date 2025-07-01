@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 from dotenv import load_dotenv
-from langchain_tavily import TavilySearch
+from googleapiclient.discovery import build
 import time
 
 # .envからAPIキーを読み込む
@@ -9,7 +9,8 @@ load_dotenv()
 
 CITY_CSV_PATH = 'data/address/city.csv'
 SITE_CSV_PATH = 'data/address/site.csv'
-TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+GOOGLE_CSE_ID = os.getenv('GOOGLE_CSE_ID')
 
 # 用途ワードと支援ワード
 PURPOSE_WORDS = ["住宅", "土地"]
@@ -124,10 +125,11 @@ def get_official_domain(city: str, prefecture: str, site_csv_path=SITE_CSV_PATH)
 
 def search_subsidy_urls(city: str, prefecture: str, max_results=10):
     """
-    市区町村名・都道府県名・用途ワード・支援ワードの組み合わせでTavily検索し、URLリストを返す
+    市区町村名・都道府県名・用途ワード・支援ワードの組み合わせでGoogle Custom Search APIで検索し、URLリストを返す
     公式ドメインがあればsite:で絞り込む（get_flexible_city_nameを使用）
     """
-    tavily = TavilySearch(api_key=TAVILY_API_KEY, max_results=max_results)
+    # Google Custom Search APIサービスを初期化
+    service = build("customsearch", "v1", developerKey=GOOGLE_API_KEY)
     urls = set()
 
     # 柔軟マッチングで正式名称を取得
@@ -144,19 +146,33 @@ def search_subsidy_urls(city: str, prefecture: str, max_results=10):
         for support in SUPPORT_WORDS:
             if domain:
                 print(f"    🌐 公式ドメインを使用: {domain}")
-                query = f"{purpose} {support} site:{domain} {minus_query}"
+                query = f"{formal_city_name} {purpose} {support} site:{domain} {minus_query}"
             else:
                 print(f"    🔍 公式ドメイン未発見、一般検索を実行")
                 query = f"{prefecture} {formal_city_name} {purpose} {support} 公式 {minus_query}"
+
             try:
-                results = tavily.invoke({"query": query})
-                for r in results.get('results', []):
-                    url = r.get('url')
+                # Google Custom Search APIで検索
+                result = service.cse().list(
+                    q=query,
+                    cx=GOOGLE_CSE_ID,
+                    num=min(max_results, 10)  # Google CSEは一度に最大10件
+                ).execute()
+
+                # 検索結果からURLを抽出
+                items = result.get('items', [])
+                for item in items:
+                    url = item.get('link')
                     if url:
                         urls.add(url)
+
+                print(f"    🔍 検索結果: {len(items)}件 (クエリ: {query})")
+                print(f"    🔍 検索結果: {items}")
                 time.sleep(1.0)  # API負荷軽減のため
+
             except Exception as e:
                 print(f"    ❌ 検索失敗: {query} ({e})")
+
     return list(urls)
 
 
@@ -166,18 +182,19 @@ def main():
     print(f"{prefecture}の市区町村数: {len(cities)}")
     result_list = []
     for city in cities:
-        urls = search_subsidy_urls(city, prefecture)
-        result_list.append({"都道府県名": prefecture, "city_name": city, "補助金関連URL": urls})
-        print(f"{city}: {len(urls)}件のURLを取得")
-        # TODO: 最後・通しのチェックの時は消す
-        # 2件取得したら終了 リミット来ないように
-        if len(result_list) >= 2:
-            break
+        if city == "船橋市":
+            urls = search_subsidy_urls(city, prefecture)
+            result_list.append({"都道府県名": prefecture, "city_name": city, "補助金関連URL": urls})
+            print(f"{city}: {len(urls)}件のURLを取得")
+            # TODO: 最後・通しのチェックの時は消す
+            # 2件取得したら終了 リミット来ないように
+            # if len(result_list) >= 2:
+            #     break
     # 結果をCSV/JSONで保存
     df_result = pd.DataFrame(result_list)
     df_result.to_json(f"{prefecture}_subsidy_urls.json", force_ascii=False, orient="records", indent=2)
     # df_result.to_csv(f"{prefecture}_subsidy_urls.csv", index=False)
-    print(f"保存完了: {prefecture}_subsidy_urls.json, {prefecture}_subsidy_urls.csv")
+    print(f"保存完了: {prefecture}_subsidy_urls.json")
 
 if __name__ == '__main__':
     main()
