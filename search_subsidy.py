@@ -162,6 +162,7 @@ def search_subsidy_urls(city: str, prefecture: str, max_results=20):
                 print(f"    ❌ 検索失敗: {query} ({e})")
     return list(urls)
 
+# debug用
 def search_subsidy_urls_detailed(city: str, prefecture: str, max_results=20):
     """
     市区町村名・都道府県名・用途ワード・支援ワードの組み合わせでTavily検索し、
@@ -238,7 +239,7 @@ def search_subsidy_urls_detailed(city: str, prefecture: str, max_results=20):
             city_results[city].append(query_result)
 
     return city_results
-
+# debug用
 def search_subsidy_urls_detailed_prefecture(prefecture: str, max_results=20, save_files=True, limit_cities=None):
     """
     都道府県全体の市区町村で補助金URLを検索し、まとめてファイルに保存
@@ -396,8 +397,8 @@ def main():
         print(f"{city}: {len(urls)}件のURLを取得")
         # TODO: 最後・通しのチェックの時は消す
         # 2件取得したら終了 リミット来ないように
-        if len(result_list) >= 2:
-            break
+        # if len(result_list) >= 2:
+        #     break
     # 結果をCSV/JSONで保存
     df_result = pd.DataFrame(result_list)
     df_result.to_json(f"{prefecture}_subsidy_urls.json", force_ascii=False, orient="records", indent=2)

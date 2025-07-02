@@ -6,14 +6,21 @@ from html_fetcher import fetch_html
 from openai_handler import client
 from config import API_KEY, JSON_DIR
 from utils import log_error
+from datetime import date
+
 
 # 新築住宅建築に特化したページ分類プロンプト
-PAGE_CLASSIFICATION_PROMPT = """
+def get_page_classification_prompt():
+    return f"""
 あなたは住宅建築に関する自治体の補助金情報ページを分析する専門家です。
 
-以下のHTMLコンテンツを分析し、このページが住宅の取得・建築や、それに付随する設備・用地・材料費などに対する補助金、または住宅取得・建築を条件とした移住、三世代同居・近居、結婚、若者、子育て世帯などに関する補助金情報に該当するかを判定してください。
+以下のHTMLコンテンツを分析し、ページが注文住宅の購入を検討している人が活用できる補助金情報かの判定をしてください。
+住宅の取得・建築や、それに付随する設備・用地・材料費などに対する補助金、または住宅取得・建築を条件とした移住、三世代同居・近居、結婚、若者、子育て世帯などに関する補助金情報が該当します。
 
 ## 対象となる住宅建築関連補助金について
+- 補助金の申請手続きを目的とした、具体的な情報の提供をしているページを対象とします。
+- 「住宅を新しく建てたい人が探している一般的な補助金」補助金を対象とします。
+- 既存の危険性からの「移転」や「除却」を主目的とした補助金は対象外とします。
 - 住宅の取得・建築や、それに付随する設備・用地・材料費などに対する補助金、または住宅取得・建築を条件とした移住、三世代同居・近居、結婚、若者、子育て世帯などを対象とした補助金を含みます。
 - 補助対象に住宅が含まれていれば対象としてください。
   - 例えば、「住宅における太陽光発電システムや蓄電池等の設備導入補助金」などで、明確に新築としていされていなくても該当市区町村の住宅が対象の場合は既存の住宅も新築の住宅も対象となります。
@@ -29,6 +36,7 @@ PAGE_CLASSIFICATION_PROMPT = """
 - 「新築」「既存」などの記載がなくても、「住宅」とだけ書かれていれば新築も含むものとします。
 - 「既存住宅のみ」「中古住宅のみ」など、既存住宅に限定されている場合のみ新築住宅を除外してください。
 - ページ内に「新築住宅は対象外」「新築住宅の購入は補助対象外」など、新築住宅が補助対象外であることが明記されている場合は、必ず"関連なし"と判定してください。
+- 現在の日付{date.today()}よりも過去に建設された住宅が補助対象の場合は、必ず"関連なし"と判定してください。
 
 【判定フロー例】
 1. 「既存住宅のみ」「中古住宅のみ」などの記載がある場合 → "関連なし"
@@ -69,6 +77,7 @@ PAGE_CLASSIFICATION_PROMPT = """
 - URLが見つからない制度の場合は、URLフィールドを空文字にする
 """
 
+
 def classify_page_type(url):
     """
     URLのページタイプを判定する
@@ -84,26 +93,60 @@ def classify_page_type(url):
         filename = f"page_classify_{int(time.time())}.html"
         # PDFファイルの場合は処理をスキップ
         # 非ウェブページファイルの拡張子を除外
-        non_web_extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-                             '.zip', '.rar', '.7z', '.tar', '.gz', '.exe', '.msi',
-                             '.dmg', '.pkg', '.deb', '.rpm', '.mp3', '.mp4', '.avi',
-                             '.mov', '.wmv', '.flv', '.mkv', '.wav', '.jpg', '.jpeg',
-                             '.png', '.gif', '.bmp', '.svg', '.tiff', '.ico', '.rtf']
+        non_web_extensions = [
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".xls",
+            ".xlsx",
+            ".ppt",
+            ".pptx",
+            ".zip",
+            ".rar",
+            ".7z",
+            ".tar",
+            ".gz",
+            ".exe",
+            ".msi",
+            ".dmg",
+            ".pkg",
+            ".deb",
+            ".rpm",
+            ".mp3",
+            ".mp4",
+            ".avi",
+            ".mov",
+            ".wmv",
+            ".flv",
+            ".mkv",
+            ".wav",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".bmp",
+            ".svg",
+            ".tiff",
+            ".ico",
+            ".rtf",
+        ]
 
         if any(url.lower().endswith(ext) for ext in non_web_extensions):
-            print(f"⚠️ 非対応のファイル(PDF, PPTX, DOCX, XLSX, etc.)のためスキップします: {url}")
+            print(
+                f"⚠️ 非対応のファイル(PDF, PPTX, DOCX, XLSX, etc.)のためスキップします: {url}"
+            )
             return {
                 "page_type": "関連なし",
                 "confidence": 0.0,
                 "reasoning": "PDFファイルのため分析対象外",
                 "found_new_housing_subsidies": [],
-                "url": url
+                "url": url,
             }
 
         html_path = fetch_html(url, filename)
 
         # HTMLファイルの内容を読み込む
-        with open(html_path, 'r', encoding='utf-8') as f:
+        with open(html_path, "r", encoding="utf-8") as f:
             html_content = f.read()
 
         # HTMLが長すぎる場合は最初の部分だけを使用（OpenAIのトークン制限対策）
@@ -112,8 +155,8 @@ def classify_page_type(url):
 
         # OpenAI APIでページを分析（構造化出力を使用）
         response = client.responses.create(
-            model="gpt-4o-mini",
-            input=f"システム指示: {PAGE_CLASSIFICATION_PROMPT}\n\nURL: {url}\n\n以下のHTMLコンテンツを分析してください：\n\n{html_content}",
+            model="gpt-4.1-mini",
+            input=f"システム指示: {get_page_classification_prompt()}\n\nURL: {url}\n\n以下のHTMLコンテンツを分析してください：\n\n{html_content}",
             text={
                 "format": {
                     "type": "json_schema",
@@ -124,18 +167,22 @@ def classify_page_type(url):
                         "properties": {
                             "page_type": {
                                 "type": "string",
-                                "enum": ["住宅関連一覧ページ", "住宅関連個別ページ", "関連なし"],
-                                "description": "ページの種類"
+                                "enum": [
+                                    "住宅関連一覧ページ",
+                                    "住宅関連個別ページ",
+                                    "関連なし",
+                                ],
+                                "description": "ページの種類",
                             },
                             "confidence": {
                                 "type": "number",
                                 "minimum": 0.0,
                                 "maximum": 1.0,
-                                "description": "判定の確信度"
+                                "description": "判定の確信度",
                             },
                             "reasoning": {
                                 "type": "string",
-                                "description": "判定理由を日本語で200文字以内で説明"
+                                "description": "判定理由を日本語で200文字以内で説明",
                             },
                             "found_new_housing_subsidies": {
                                 "type": "array",
@@ -144,41 +191,61 @@ def classify_page_type(url):
                                     "properties": {
                                         "title": {
                                             "type": "string",
-                                            "description": "補助金制度のタイトル・名称"
+                                            "description": "補助金制度のタイトル・名称",
                                         },
                                         "url": {
                                             "type": "string",
-                                            "description": "補助金制度の詳細ページURL（見つからない場合は空文字）"
-                                        }
+                                            "description": "補助金制度の詳細ページURL（見つからない場合は空文字）",
+                                        },
                                     },
                                     "required": ["title", "url"],
-                                    "additionalProperties": False
+                                    "additionalProperties": False,
                                 },
-                                "description": "見つかった新築住宅建築関連補助金制度のタイトルとURL一覧（最大5個）"
+                                "description": "見つかった新築住宅建築関連補助金制度のタイトルとURL一覧（最大5個）",
                             },
                             "new_housing_subsidy_categories": {
                                 "type": "array",
                                 "items": {
                                     "type": "string",
-                                    "enum": ["新築住宅建築", "新築住宅取得", "新築用土地取得", "新築時住宅設備", "新築住宅ローン利子補給", "子育て世帯新築支援", "新婚世帯新築支援", "移住定住新築支援", "省エネ新築住宅", "認定新築住宅", "その他新築関連"]
+                                    "enum": [
+                                        "新築住宅建築",
+                                        "新築住宅取得",
+                                        "新築用土地取得",
+                                        "新築時住宅設備",
+                                        "新築住宅ローン利子補給",
+                                        "子育て世帯新築支援",
+                                        "新婚世帯新築支援",
+                                        "移住定住新築支援",
+                                        "省エネ新築住宅",
+                                        "認定新築住宅",
+                                        "その他新築関連",
+                                    ],
                                 },
-                                "description": "該当する新築住宅関連補助金のカテゴリ一覧"
+                                "description": "該当する新築住宅関連補助金のカテゴリ一覧",
                             },
                             "page_title": {
                                 "type": "string",
-                                "description": "ページのタイトル"
+                                "description": "ページのタイトル",
                             },
                             "main_content_summary": {
                                 "type": "string",
-                                "description": "ページの主要コンテンツの要約（100文字以内）"
-                            }
+                                "description": "ページの主要コンテンツの要約（100文字以内）",
+                            },
                         },
-                        "required": ["page_type", "confidence", "reasoning", "found_new_housing_subsidies", "new_housing_subsidy_categories", "page_title", "main_content_summary"],
-                        "additionalProperties": False
-                    }
+                        "required": [
+                            "page_type",
+                            "confidence",
+                            "reasoning",
+                            "found_new_housing_subsidies",
+                            "new_housing_subsidy_categories",
+                            "page_title",
+                            "main_content_summary",
+                        ],
+                        "additionalProperties": False,
+                    },
                 }
             },
-            temperature=0.1
+            temperature=0.1,
         )
 
         # 構造化出力からJSONを取得
@@ -209,8 +276,9 @@ def classify_page_type(url):
             "new_housing_subsidy_categories": [],
             "page_title": "",
             "main_content_summary": "",
-            "error": str(e)
+            "error": str(e),
         }
+
 
 def classify_urls_from_file(json_file_path):
     """
@@ -223,7 +291,7 @@ def classify_urls_from_file(json_file_path):
         list: 分類結果のリスト
     """
     try:
-        with open(json_file_path, 'r', encoding='utf-8') as f:
+        with open(json_file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         results = []
@@ -236,20 +304,21 @@ def classify_urls_from_file(json_file_path):
             print(f"\n{prefecture} {city} の分析開始...")
 
             for i, url in enumerate(urls, 1):
-                print(f"  {i}/{len(urls)}: {url}")
+                if city == "千葉市":
+                    print(f"  {i}/{len(urls)}: {url}")
 
-                result = classify_page_type(url)
-                result["prefecture"] = prefecture
-                result["city"] = city
+                    result = classify_page_type(url)
+                    result["prefecture"] = prefecture
+                    result["city"] = city
 
-                results.append(result)
+                    results.append(result)
 
-                # API負荷軽減のため待機
-                time.sleep(5)
+                    # API負荷軽減のため待機
+                    time.sleep(5)
 
-                # TODO: 必要なくなったら消す。3つまでテスト（デバッグ用）
-                # if i >= 3:
-                #     break
+                    # TODO: 必要なくなったら消す。3つまでテスト（デバッグ用）
+                    # if i >= 3:
+                    #     break
 
             # TODO: 必要なくなったら消す。1つの市区町村だけテスト（デバッグ用）
             # break
@@ -259,6 +328,7 @@ def classify_urls_from_file(json_file_path):
     except Exception as e:
         print(f"ファイル処理エラー: {str(e)}")
         return []
+
 
 def save_classification_results(results, output_json_file):
     """
@@ -270,7 +340,7 @@ def save_classification_results(results, output_json_file):
     """
     try:
         # JSONで保存
-        with open(output_json_file, 'w', encoding='utf-8') as f:
+        with open(output_json_file, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
         print(f"JSON保存完了: {output_json_file}")
 
@@ -279,7 +349,7 @@ def save_classification_results(results, output_json_file):
 
         # 分類結果の統計を表示
         if results:
-            page_types = [r.get('page_type', 'エラー') for r in results]
+            page_types = [r.get("page_type", "エラー") for r in results]
             type_counts = pd.Series(page_types).value_counts()
             print("\n=== 分類結果統計 ===")
             for page_type, count in type_counts.items():
@@ -287,6 +357,7 @@ def save_classification_results(results, output_json_file):
 
     except Exception as e:
         print(f"保存エラー: {str(e)}")
+
 
 def extract_individual_page_urls(results, base_json_file):
     """
@@ -298,23 +369,25 @@ def extract_individual_page_urls(results, base_json_file):
     """
     try:
         # 住宅関連個別ページのみをフィルタリング
-        individual_pages = [r for r in results if r.get('page_type') == '住宅関連個別ページ']
+        individual_pages = [
+            r for r in results if r.get("page_type") == "住宅関連個別ページ"
+        ]
 
         if not individual_pages:
             print("新築住宅関連の個別ページが見つかりませんでした")
             return
 
         # 個別ページ用のファイル名を生成
-        individual_json = base_json_file.replace('.json', '_individual_pages.json')
-        individual_urls_txt = base_json_file.replace('.json', '_individual_urls.txt')
+        individual_json = base_json_file.replace(".json", "_individual_pages.json")
+        individual_urls_txt = base_json_file.replace(".json", "_individual_urls.txt")
 
         # 詳細情報付きで保存（JSON）
-        with open(individual_json, 'w', encoding='utf-8') as f:
+        with open(individual_json, "w", encoding="utf-8") as f:
             json.dump(individual_pages, f, ensure_ascii=False, indent=2)
         print(f"個別ページ詳細保存完了: {individual_json}")
 
         # URLリストのみを保存（テキストファイル）
-        with open(individual_urls_txt, 'w', encoding='utf-8') as f:
+        with open(individual_urls_txt, "w", encoding="utf-8") as f:
             for page in individual_pages:
                 f.write(f"{page.get('url', '')}\n")
         print(f"個別ページURLリスト保存完了: {individual_urls_txt}")
@@ -324,12 +397,13 @@ def extract_individual_page_urls(results, base_json_file):
     except Exception as e:
         print(f"個別ページ抽出エラー: {str(e)}")
 
+
 def main():
     """メイン処理"""
     print("補助金ページ分類ツール")
 
     # 入力ファイルを選択
-    json_files = [f for f in os.listdir('.') if f.endswith('_subsidy_urls.json')]
+    json_files = [f for f in os.listdir(".") if f.endswith("_subsidy_urls.json")]
 
     if not json_files:
         print("*_subsidy_urls.jsonファイルが見つかりません")
@@ -353,7 +427,9 @@ def main():
 
         if results:
             # 結果を保存
-            output_file = selected_file.replace('_subsidy_urls.json', '_page_classification.json')
+            output_file = selected_file.replace(
+                "_subsidy_urls.json", "_page_classification.json"
+            )
             save_classification_results(results, output_file)
         else:
             print("分類結果が得られませんでした")
@@ -363,5 +439,6 @@ def main():
     except KeyboardInterrupt:
         print("\n処理が中断されました")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
