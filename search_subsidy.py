@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import json
 from dotenv import load_dotenv
 from langchain_tavily import TavilySearch
 import time
@@ -122,7 +123,7 @@ def get_official_domain(city: str, prefecture: str, site_csv_path=SITE_CSV_PATH)
         print(f"ドメイン取得エラー: {str(e)}")
         return None
 
-def search_subsidy_urls(city: str, prefecture: str, max_results=10):
+def search_subsidy_urls(city: str, prefecture: str, max_results=20):
     """
     市区町村名・都道府県名・用途ワード・支援ワードの組み合わせでTavily検索し、URLリストを返す
     公式ドメインがあればsite:で絞り込む（get_flexible_city_nameを使用）
@@ -144,11 +145,12 @@ def search_subsidy_urls(city: str, prefecture: str, max_results=10):
         for support in SUPPORT_WORDS:
             if domain:
                 print(f"    🌐 公式ドメインを使用: {domain}")
-                query = f"{purpose} {support} site:{domain} {minus_query}"
+                query = f"{formal_city_name} {purpose} {support} site:{domain} {minus_query}"
             else:
                 print(f"    🔍 公式ドメイン未発見、一般検索を実行")
                 query = f"{prefecture} {formal_city_name} {purpose} {support} 公式 {minus_query}"
             try:
+                print(f"    🔍 query: {query}")
                 results = tavily.invoke({"query": query})
                 for r in results.get('results', []):
                     url = r.get('url')
@@ -159,6 +161,228 @@ def search_subsidy_urls(city: str, prefecture: str, max_results=10):
                 print(f"    ❌ 検索失敗: {query} ({e})")
     return list(urls)
 
+def search_subsidy_urls_detailed(city: str, prefecture: str, max_results=20):
+    """
+    市区町村名・都道府県名・用途ワード・支援ワードの組み合わせでTavily検索し、
+    クエリごとに詳細なデータを返す（重複削除なし）
+
+    Args:
+        city (str): 市区町村名
+        prefecture (str): 都道府県名
+        max_results (int): 検索結果の最大数
+        save_txt (bool): URLをtxtファイルに保存するかどうか
+
+    Returns:
+        dict: 市区町村名をキーとした辞書
+        "市区町村名": [
+            {
+                "クエリ": "検索クエリ",
+                "URL": ["URL1", "URL2", ...],
+                "URL数": 取得URL数,
+                "status": "success" | "error",
+                "error_message": "エラーメッジ（エラー時のみ）"
+            },
+            ...
+        ]...
+    """
+    tavily = TavilySearch(api_key=TAVILY_API_KEY, max_results=max_results)
+
+    # 柔軟マッチングで正式名称を取得
+    formal_city_name = get_flexible_city_name(city, prefecture)
+    if formal_city_name != city:
+        print(f"    📝 正式名称: {city} → {formal_city_name}")
+
+    # 正式名称で公式ドメインを取得
+    domain = get_official_domain(formal_city_name, prefecture)
+    # 複数指定したいがうまく取得できないので比較的多いpdfのみ除外
+    minus_query = '-filetype:pdf'
+
+    # 市区町村名をキーとした辞書を初期化
+    city_results = {city: []}
+
+    for purpose in PURPOSE_WORDS:
+        for support in SUPPORT_WORDS:
+            if domain:
+                print(f"    🌐 公式ドメインを使用: {domain}")
+                query = f"{formal_city_name} {purpose} {support} site:{domain} {minus_query}"
+            else:
+                print(f"    🔍 公式ドメイン未発見、一般検索を実行")
+                query = f"{prefecture} {formal_city_name} {purpose} {support} 公式 {minus_query}"
+
+            query_result = {
+                "クエリ": query,
+                "URL": [],
+                "URL数": 0,
+                "status": "success"
+            }
+
+            try:
+                print(f"    🔍 query: {query}")
+                results = tavily.invoke({"query": query})
+                urls = []
+                for r in results.get('results', []):
+                    url = r.get('url')
+                    if url:
+                        urls.append(url)
+
+                query_result["URL"] = urls
+                query_result["URL数"] = len(urls)
+                time.sleep(1.0)  # API負荷軽減のため
+
+            except Exception as e:
+                print(f"    ❌ 検索失敗: {query} ({e})")
+                query_result["status"] = "error"
+                query_result["error_message"] = str(e)
+
+            city_results[city].append(query_result)
+
+    return city_results
+
+def search_subsidy_urls_detailed_prefecture(prefecture: str, max_results=20, save_files=True, limit_cities=None):
+    """
+    都道府県全体の市区町村で補助金URLを検索し、まとめてファイルに保存
+
+    Args:
+        prefecture (str): 都道府県名
+        max_results (int): 各検索クエリの最大結果数
+        save_files (bool): ファイル保存するかどうか
+        limit_cities (int): 処理する市区町村数の上限（テスト用、Noneで全て）
+
+    Returns:
+        dict: 全市区町村の検索結果を含む辞書
+        {
+            "市区町村名1": [
+                {
+                    "クエリ": "検索クエリ",
+                    "URL": ["URL1", "URL2", ...],
+                    "URL数": 取得URL数,
+                    "status": "success" | "error",
+                    "error_message": "エラーメッセージ（エラー時のみ）"
+                },
+                ...
+            ],
+            "市区町村名2": [...],
+            ...
+        }
+    """
+    print(f"🌐 {prefecture}の補助金URL検索を開始")
+
+    # 都道府県内の全市区町村を取得
+    cities = get_cities_by_prefecture(prefecture)
+    print(f"📍 対象市区町村数: {len(cities)}件")
+
+    # 処理する市区町村数を制限（テスト用）
+    if limit_cities:
+        cities = cities[:limit_cities]
+        print(f"⚠️  テストモード: {limit_cities}件のみ処理")
+
+    all_results = {}
+    all_urls = []
+
+    for i, city in enumerate(cities, 1):
+        print(f"\n📍 ({i}/{len(cities)}) {city} を処理中...")
+
+        try:
+            # 各市区町村の詳細検索を実行（txtファイル保存はオフ）
+            city_result = search_subsidy_urls_detailed(city, prefecture, max_results)
+            all_results.update(city_result)
+
+            # 成功したURLを収集
+            for query_data in city_result[city]:
+                if query_data["status"] == "success":
+                    all_urls.extend(query_data["URL"])
+
+            print(f"✅ {city}: 完了")
+
+        except Exception as e:
+            print(f"❌ {city}: エラー - {e}")
+            # エラーが発生した市区町村も記録
+            all_results[city] = [{
+                "クエリ": "",
+                "URL": [],
+                "URL数": 0,
+                "status": "error",
+                "error_message": f"市区町村処理エラー: {str(e)}"
+            }]
+
+    print(f"\n📊 検索完了:")
+    print(f"  処理市区町村数: {len(all_results)}")
+    print(f"  総URL数: {len(all_urls)}")
+
+    # ファイル保存
+    if save_files:
+        # 安全なファイル名を生成
+        safe_prefecture = prefecture.replace("/", "_").replace("\\", "_")
+
+        # 1. 詳細JSONファイル保存
+        json_filename = f"{safe_prefecture}_subsidy_urls_detailed.json"
+        try:
+            with open(json_filename, 'w', encoding='utf-8') as f:
+                json.dump(all_results, f, ensure_ascii=False, indent=2)
+            print(f"💾 詳細データ保存: {json_filename}")
+        except Exception as e:
+            print(f"❌ JSON保存失敗: {e}")
+
+        # 2. URLリストtxtファイル保存
+        txt_filename = f"{safe_prefecture}_all_urls.txt"
+        try:
+            with open(txt_filename, 'w', encoding='utf-8') as f:
+                for url in all_urls:
+                    f.write(f"{url}\n")
+            print(f"💾 URLリスト保存: {txt_filename} ({len(all_urls)}件)")
+        except Exception as e:
+            print(f"❌ txt保存失敗: {e}")
+
+                # 3. 統計情報保存
+        stats_filename = f"{safe_prefecture}_stats.json"
+        try:
+            stats = {
+                "prefecture": prefecture,
+                "total_cities": len(all_results),
+                "total_urls": len(all_urls),
+                "cities_with_results": len([city for city, data in all_results.items()
+                                           if any(q["status"] == "success" and q["URL数"] > 0 for q in data)]),
+                "cities_with_errors": len([city for city, data in all_results.items()
+                                          if any(q["status"] == "error" for q in data)]),
+                "url_breakdown": {}
+            }
+
+            # 市区町村別URL数の統計
+            for city, data in all_results.items():
+                city_url_count = sum(q["URL数"] for q in data if q["status"] == "success")
+                if city_url_count > 0:
+                    stats["url_breakdown"][city] = city_url_count
+
+            with open(stats_filename, 'w', encoding='utf-8') as f:
+                json.dump(stats, f, ensure_ascii=False, indent=2)
+            print(f"📈 統計情報保存: {stats_filename}")
+        except Exception as e:
+            print(f"❌ 統計保存失敗: {e}")
+
+                # 4. 検索結果詳細CSV保存
+        csv_detailed_filename = f"{safe_prefecture}_search_results_detailed.csv"
+        try:
+            csv_data = []
+
+            for city, data in all_results.items():
+                for query_info in data:
+                    # 各URLを個別の行として記録（URLがある場合のみ）
+                    if query_info["URL数"] > 0:
+                        for url in query_info["URL"]:
+                            csv_data.append({
+                                "都道府県": prefecture,
+                                "市区町村": city,
+                                "クエリ": query_info["クエリ"],
+                                "URL": url
+                            })
+
+            df_detailed = pd.DataFrame(csv_data)
+            df_detailed.to_csv(csv_detailed_filename, index=False, encoding='utf-8-sig')
+            print(f"📊 検索結果詳細CSV保存: {csv_detailed_filename} ({len(csv_data)}行)")
+        except Exception as e:
+            print(f"❌ 詳細CSV保存失敗: {e}")
+
+    return all_results
 
 def main():
     prefecture = input('都道府県名を入力してください: ')
