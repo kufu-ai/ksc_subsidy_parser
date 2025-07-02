@@ -20,9 +20,9 @@ from pathlib import Path
 from datetime import datetime
 
 # 必要なモジュールをインポート
-from search_subsidy import get_cities_by_prefecture, search_subsidy_urls, get_flexible_city_name, get_official_domain
-from page_classifier import classify_urls_from_file, save_classification_results
-from extract_urls_from_list_pages import extract_and_classify_from_list_pages, save_extraction_results, load_classification_results
+from search_subsidy import get_cities_by_prefecture, search_subsidy_urls
+from page_classifier import classify_urls_from_file, save_classification_results, classify_page_type
+from extract_urls_from_list_pages import load_classification_results
 from merge_classification_results import merge_classification_results, create_comprehensive_summary, save_merged_results
 
 def process_prefecture(prefecture_name, settings=None):
@@ -142,8 +142,6 @@ def step1_search_subsidy_urls(prefecture_name, settings):
     ステップ1: 補助金URL検索
     """
     try:
-        from search_subsidy import get_cities_by_prefecture, search_subsidy_urls
-
         # 市区町村リストを取得
         cities = get_cities_by_prefecture(prefecture_name)
         print(f"対象市区町村数: {len(cities)}")
@@ -157,27 +155,26 @@ def step1_search_subsidy_urls(prefecture_name, settings):
         total_urls = 0
 
         for i, city in enumerate(cities, 1):
-            if city == "千葉市" or city == "銚子市":
-                print(f"  {i}/{len(cities)}: {city} を検索中...")
+            print(f"  {i}/{len(cities)}: {city} を検索中...")
 
-                # search_subsidy_urls内で柔軟マッチング処理される
-                urls = search_subsidy_urls(city, prefecture_name, max_results=settings['max_urls_per_city'])
+            # search_subsidy_urls内で柔軟マッチング処理される
+            urls = search_subsidy_urls(city, prefecture_name, max_results=settings['max_urls_per_city'])
 
-                result_list.append({
-                    "都道府県名": prefecture_name,
-                    "city_name": city,
-                    "補助金関連URL": urls
-                })
-                total_urls += len(urls)
-                print(f"    📍 {len(urls)}件のURLを取得")
+            result_list.append({
+                "都道府県名": prefecture_name,
+                "city_name": city,
+                "補助金関連URL": urls
+            })
+            total_urls += len(urls)
+            print(f"    📍 {len(urls)}件のURLを取得")
 
-                # API負荷軽減
-                time.sleep(1)
+            # API負荷軽減
+            time.sleep(1)
 
-                #TODO: kesu 開発中は2件でスキップ
-                # if i >= 2:
-                #     print(f"    ⚠️  開発モード: {i}件で処理を停止")
-                #     break
+            #TODO: kesu 開発中は2件でスキップ
+            # if i >= 2:
+            #     print(f"    ⚠️  開発モード: {i}件で処理を停止")
+            #     break
 
         # 結果を保存
         output_json = f"{prefecture_name}_subsidy_urls.json"
@@ -307,7 +304,6 @@ def step3_extract_from_list_pages(classification_file, settings):
 
                 try:
                     # URLを分類（page_classifier.pyのclassify_page_typeを使用）
-                    from page_classifier import classify_page_type
                     classification_result = classify_page_type(url)
 
                     # 元の一覧ページ情報を追加
