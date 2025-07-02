@@ -17,7 +17,7 @@ def test_prefecture_search():
         prefecture=prefecture,
         max_results=20,  # 各クエリの結果数を制限
         save_files=True,
-        limit_cities=None  # 最初の2つの市区町村のみ
+        limit_cities=1  # 最初の2つの市区町村のみ
     )
 
     print("\n📊 結果サマリー:")

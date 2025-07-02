@@ -13,7 +13,7 @@ SITE_CSV_PATH = 'data/address/site.csv'
 TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
 
 # 用途ワードと支援ワード
-PURPOSE_WORDS = ["住宅", "土地"]
+PURPOSE_WORDS = ["住宅"]
 SUPPORT_WORDS = ["補助金"]
 
 # prefecture_idから都道府県名への対応辞書
@@ -145,12 +145,13 @@ def search_subsidy_urls(city: str, prefecture: str, max_results=20):
         for support in SUPPORT_WORDS:
             if domain:
                 print(f"    🌐 公式ドメインを使用: {domain}")
-                query = f"{formal_city_name} {purpose} {support} site:{domain} {minus_query}"
+                query = f"{formal_city_name} {purpose} {support} {minus_query}"
             else:
                 print(f"    🔍 公式ドメイン未発見、一般検索を実行")
-                query = f"{prefecture} {formal_city_name} {purpose} {support} 公式 {minus_query}"
+                query = f"{prefecture}{formal_city_name} {purpose} {support} 公式 {minus_query}"
             try:
                 print(f"    🔍 query: {query}")
+                tavily = TavilySearch(api_key=TAVILY_API_KEY, max_results=max_results, include_domains=[domain])
                 results = tavily.invoke({"query": query})
                 for r in results.get('results', []):
                     url = r.get('url')
@@ -185,8 +186,6 @@ def search_subsidy_urls_detailed(city: str, prefecture: str, max_results=20):
             ...
         ]...
     """
-    tavily = TavilySearch(api_key=TAVILY_API_KEY, max_results=max_results)
-
     # 柔軟マッチングで正式名称を取得
     formal_city_name = get_flexible_city_name(city, prefecture)
     if formal_city_name != city:
@@ -204,10 +203,10 @@ def search_subsidy_urls_detailed(city: str, prefecture: str, max_results=20):
         for support in SUPPORT_WORDS:
             if domain:
                 print(f"    🌐 公式ドメインを使用: {domain}")
-                query = f"{formal_city_name} {purpose} {support} site:{domain} {minus_query}"
+                query = f"{formal_city_name} {purpose} {support} -filetype:pdf"
             else:
                 print(f"    🔍 公式ドメイン未発見、一般検索を実行")
-                query = f"{prefecture} {formal_city_name} {purpose} {support} 公式 {minus_query}"
+                query = f"{prefecture}{formal_city_name} {purpose} {support} 公式"
 
             query_result = {
                 "クエリ": query,
@@ -217,6 +216,8 @@ def search_subsidy_urls_detailed(city: str, prefecture: str, max_results=20):
             }
 
             try:
+                tavily = TavilySearch(api_key=TAVILY_API_KEY, max_results=max_results, include_domains=[domain])
+
                 print(f"    🔍 query: {query}")
                 results = tavily.invoke({"query": query})
                 urls = []
