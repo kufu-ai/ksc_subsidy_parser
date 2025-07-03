@@ -41,13 +41,13 @@ def get_page_classification_prompt():
 【判定フロー例】
 1. 「既存住宅のみ」「中古住宅のみ」などの記載がある場合 → "関連なし"
 2. 「新築住宅は対象外」などの記載がある場合 → "関連なし"
-3. 「市内の住宅」「住宅全般」「戸建て住宅」などの記載がある場合 → "住宅関連個別ページ"または"住宅関連一覧ページ"
-4. 「住宅」とだけ書かれている場合 → "住宅関連個別ページ"または"住宅関連一覧ページ"
+3. 「市内の住宅」「住宅全般」「戸建て住宅」などの記載がある場合 → "住宅関連個別ページ"または"補助金情報一覧ページ"
+4. 「住宅」とだけ書かれている場合 → "住宅関連個別ページ"または"補助金情報一覧ページ"
 
 
 ## 分類基準：
 
-1. **住宅関連一覧ページ**: 複数の新築住宅建築関連補助金制度が掲載されているページ
+1. **補助金情報一覧ページ**: 複数の新築住宅建築関連補助金制度が掲載されているページ
    - 複数の新築住宅関連補助金制度のタイトルやリンクが含まれている
    - 新築住宅関連制度の一覧、目次、索引のような構造を持つ
    - 「新築住宅補助金一覧」「住宅建築支援制度」「新築関連制度」などの見出しがある
@@ -136,7 +136,8 @@ def classify_page_type(url):
                 f"⚠️ 非対応のファイル(PDF, PPTX, DOCX, XLSX, etc.)のためスキップします: {url}"
             )
             return {
-                "page_type": "関連なし",
+                "page_type": "その他",
+                "is_target_page": "対象外",
                 "confidence": 0.0,
                 "reasoning": "PDFファイルのため分析対象外",
                 "found_new_housing_subsidies": [],
@@ -168,11 +169,19 @@ def classify_page_type(url):
                             "page_type": {
                                 "type": "string",
                                 "enum": [
-                                    "住宅関連一覧ページ",
+                                    "補助金情報一覧ページ",
                                     "住宅関連個別ページ",
-                                    "関連なし",
+                                    "その他",
                                 ],
                                 "description": "ページの種類",
+                            },
+                            "is_target_page": {
+                                "type": "string",
+                                "enum": [
+                                    "対象",
+                                    "対象外",
+                                ],
+                                "description": "ページが対象かどうか",
                             },
                             "confidence": {
                                 "type": "number",
@@ -234,6 +243,7 @@ def classify_page_type(url):
                         },
                         "required": [
                             "page_type",
+                            "is_target_page",
                             "confidence",
                             "reasoning",
                             "found_new_housing_subsidies",
@@ -296,32 +306,38 @@ def classify_urls_from_file(json_file_path):
 
         results = []
 
-        for item in data:
-            prefecture = item.get("都道府県名", "")
-            city = item.get("city_name", "")
-            urls = item.get("補助金関連URL", [])
+        # ファイル名から都道府県名を推測
+        prefecture = ""
+        if "_" in json_file_path:
+            prefecture = json_file_path.split("_")[0]
 
-            print(f"\n{prefecture} {city} の分析開始...")
+        # 新しいJSON形式に対応: {市区町村名: [検索結果の配列]}
+        for city_name, search_results_list in data.items():
+            print(f"\n{prefecture} {city_name} の分析開始...")
 
-            for i, url in enumerate(urls, 1):
-                if city == "千葉市":
-                    print(f"  {i}/{len(urls)}: {url}")
+            # 各市区町村の検索結果リストを処理
+            for search_result in search_results_list:
+                if isinstance(search_result, dict) and "URL" in search_result:
+                    urls = search_result.get("URL", [])
 
-                    result = classify_page_type(url)
-                    result["prefecture"] = prefecture
-                    result["city"] = city
+                    for i, url in enumerate(urls, 1):
+                        print(f"  {i}/{len(urls)}: {url}")
 
-                    results.append(result)
+                        result = classify_page_type(url)
+                        result["prefecture"] = prefecture
+                        result["city"] = city_name
 
-                    # API負荷軽減のため待機
-                    time.sleep(5)
+                        results.append(result)
 
-                    # TODO: 必要なくなったら消す。3つまでテスト（デバッグ用）
-                    # if i >= 3:
-                    #     break
+                        # API負荷軽減のため待機
+                        time.sleep(5)
+
+                        # TODO: 必要なくなったら消す。3つまでテスト（デバッグ用）
+                        # if i >= 3:
+                        #     break
 
             # TODO: 必要なくなったら消す。1つの市区町村だけテスト（デバッグ用）
-            # break
+            break
 
         return results
 
@@ -332,19 +348,24 @@ def classify_urls_from_file(json_file_path):
 
 def save_classification_results(results, output_json_file):
     """
-    分類結果をJSONファイルに保存する
+    分類結果をJSONファイルとCSVファイルに保存する
 
     Args:
         results (list): 分類結果のリスト
         output_json_file (str): 出力JSONファイル名
     """
     try:
-        # JSONで保存
+        # 分類した結果を全てJSONで保存
         with open(output_json_file, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
         print(f"JSON保存完了: {output_json_file}")
 
-        # 個別ページのURLを抽出
+        # CSVファイルも作成
+        output_csv_file = output_json_file.replace(".json", ".csv")
+        save_results_as_csv(results, output_csv_file)
+        print(f"CSV保存完了: {output_csv_file}")
+
+        # 個別ページのURLのみを抽出
         extract_individual_page_urls(results, output_json_file)
 
         # 分類結果の統計を表示
@@ -359,9 +380,60 @@ def save_classification_results(results, output_json_file):
         print(f"保存エラー: {str(e)}")
 
 
+def save_results_as_csv(results, output_csv_file):
+    """
+    分類結果をCSVファイルに保存する
+
+    Args:
+        results (list): 分類結果のリスト
+        output_csv_file (str): 出力CSVファイル名
+    """
+    try:
+        # CSVに変換するためのデータを準備
+        csv_data = []
+        for result in results:
+            # 基本情報を抽出
+            row = {
+                "URL": result.get("url", ""),
+                "都道府県": result.get("prefecture", ""),
+                "市区町村": result.get("city", ""),
+                "ページタイプ": result.get("page_type", ""),
+                "対象ページ": result.get("is_target_page", ""),
+                "確信度": result.get("confidence", 0.0),
+                "判定理由": result.get("reasoning", ""),
+                "ページタイトル": result.get("page_title", ""),
+                "コンテンツ要約": result.get("main_content_summary", ""),
+                "エラー": result.get("error", ""),
+            }
+
+            # 補助金制度のタイトルとURLを文字列として結合
+            subsidies = result.get("found_new_housing_subsidies", [])
+            if subsidies:
+                titles = [s.get("title", "") for s in subsidies if s.get("title")]
+                subsidy_urls = [s.get("url", "") for s in subsidies if s.get("url")]
+                row["見つかった補助金制度"] = " | ".join(titles)
+                row["補助金制度URL"] = " | ".join(subsidy_urls)
+            else:
+                row["見つかった補助金制度"] = ""
+                row["補助金制度URL"] = ""
+
+            # カテゴリを文字列として結合
+            categories = result.get("new_housing_subsidy_categories", [])
+            row["補助金カテゴリ"] = " | ".join(categories) if categories else ""
+
+            csv_data.append(row)
+
+        # DataFrameを作成してCSVに保存
+        df = pd.DataFrame(csv_data)
+        df.to_csv(output_csv_file, index=False, encoding="utf-8-sig")
+
+    except Exception as e:
+        print(f"CSV保存エラー: {str(e)}")
+
+
 def extract_individual_page_urls(results, base_json_file):
     """
-    個別ページのURLを抽出して別ファイルに保存する
+    個別ページのみのURLを抽出して別ファイルに保存する
 
     Args:
         results (list): 分類結果のリスト
@@ -400,13 +472,15 @@ def extract_individual_page_urls(results, base_json_file):
 
 def main():
     """メイン処理"""
-    print("補助金ページ分類ツール")
+    print("補助金ページ分類します。")
 
     # 入力ファイルを選択
-    json_files = [f for f in os.listdir(".") if f.endswith("_subsidy_urls.json")]
+    json_files = [
+        f for f in os.listdir(".") if f.endswith("_subsidy_urls_detailed.json")
+    ]
 
     if not json_files:
-        print("*_subsidy_urls.jsonファイルが見つかりません")
+        print("*_subsidy_urls_detailed.jsonファイルが見つかりません")
         return
 
     print("\n利用可能なファイル:")
@@ -427,9 +501,9 @@ def main():
 
         if results:
             # 結果を保存
-            output_file = selected_file.replace(
-                "_subsidy_urls.json", "_page_classification.json"
-            )
+            # 元のファイル名から新しいファイル名を生成
+            base_name = selected_file.replace("_subsidy_urls_detailed.json", "")
+            output_file = f"{base_name}_page_classification.json"
             save_classification_results(results, output_file)
         else:
             print("分類結果が得られませんでした")
