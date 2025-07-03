@@ -1,5 +1,5 @@
 from html_fetcher import fetch_html
-from openai_handler import upload_file, process_with_openai
+from openai_handler import process_html_file_with_openai
 from csv_handler import save_to_csv
 from utils import load_urls
 
@@ -11,8 +11,7 @@ for idx, url in enumerate(urls):
     print(f"\n🚀 {idx+1}/{len(urls)}: {url} の解析を開始")
 
     html_path = fetch_html(url, f"page_{idx+1}.html")
-    file_id = upload_file(html_path)
-    json_path = process_with_openai(file_id, url)
+    json_path = process_html_file_with_openai(html_path, url)
 
     # **❗ JSONデータがない場合はスキップ**
     if json_path is None:

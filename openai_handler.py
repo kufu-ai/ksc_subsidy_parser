@@ -2,145 +2,182 @@ import openai
 import json
 import time
 import os
-from config import API_KEY, JSON_DIR, ASSISTANT_ID
+from config import API_KEY, JSON_DIR
 from utils import load_prompt, log_error
 
 client = openai.OpenAI(api_key=API_KEY)
 
-# HTMLファイルをOpenAIにアップロード
-def upload_file(filepath):
-    """ HTMLファイルをOpenAIにアップロード """
-    file_obj = client.files.create(
-        file=open(filepath, "rb"),
-        purpose="assistants"
-    )
-    return file_obj.id
+
+def get_subsidy_extraction_schema():
+    """
+    補助金情報抽出用の構造化出力スキーマを定義する
+    """
+    return {
+        "type": "object",
+        "properties": {
+            "年度": {
+                "type": "string",
+                "description": "元号表記を西暦に変換し、4/1を設定（ex.令和6年度 → 2024-04-01）",
+            },
+            "都道府県": {"type": "string", "description": "都道府県名"},
+            "市区町村": {"type": "string", "description": "市区町村名"},
+            "制度名": {"type": "string", "description": "年度を含めず、制度名のみ抽出"},
+            "制度の概要": {"type": "string", "description": "制度の概要説明"},
+            "受付開始日": {
+                "type": "string",
+                "description": "受付開始日（YYYY-MM-DD形式、ない場合は空文字）",
+            },
+            "受付終了日": {
+                "type": "string",
+                "description": "受付終了日（YYYY-MM-DD形式、ない場合は空文字）",
+            },
+            "受付期間の補足": {
+                "type": "string",
+                "description": "条件による違いや補足などを記載",
+            },
+            "金額タイプ": {
+                "type": "integer",
+                "enum": [0, 1, 2, 3],
+                "description": "一律:0, 条件による変動:1, 設備ごと:2, 条件変動・上限なし:3",
+            },
+            "金額": {
+                "type": "integer",
+                "description": "金額（数値のみ、万は数値に変換）",
+            },
+            "金額に関する詳細情報": {
+                "type": "string",
+                "description": "条件による加算や設備による違いの詳細情報",
+            },
+            "対象条件": {
+                "type": "string",
+                "description": "対象条件（改行は\\nで表現）",
+            },
+            "対象経費": {
+                "type": "string",
+                "description": "対象経費（改行は\\nで表現）",
+            },
+            "公式URL": {"type": "string", "description": "公式URL"},
+            "抽出結果": {
+                "type": "string",
+                "description": "エラーや問題がある場合のメッセージ（正常時は空文字）",
+            },
+        },
+        "required": [
+            "年度",
+            "都道府県",
+            "市区町村",
+            "制度名",
+            "制度の概要",
+            "受付開始日",
+            "受付終了日",
+            "受付期間の補足",
+            "金額タイプ",
+            "金額",
+            "金額に関する詳細情報",
+            "対象条件",
+            "対象経費",
+            "公式URL",
+            "抽出結果",
+        ],
+        "additionalProperties": False,
+    }
+
 
 # OpenAI APIを使ってHTML解析し、JSONを取得
-def process_with_openai(file_id, url):
-    prompt_template = load_prompt()
-    prompt = prompt_template.replace("{URL}", url)
+def process_with_openai(html_content, url):
+    """
+    構造化出力を使ってHTML解析し、補助金情報を抽出する
 
-    # スレッド作成
-    thread = client.beta.threads.create()
-    thread_id = thread.id
+    Args:
+        html_content (str): 解析対象のHTMLコンテンツ
+        url (str): 対象URL
 
-    # 解析リクエスト
-    client.beta.threads.messages.create(
-        thread_id=thread_id,
-        role="user",
-        content=[{
-            "type": "text",
-            "text": prompt
-        }],
-        attachments=[{
-            "file_id": file_id,
-            "tools": [{"type": "file_search"}]
-        }]
-    )
+    Returns:
+        str: 保存されたJSONファイルのパス、エラー時はNone
+    """
+    try:
+        prompt_template = load_prompt()
+        prompt = prompt_template.replace("{URL}", url)
 
-    # 解析実行
-    run = client.beta.threads.runs.create(
-        thread_id=thread_id,
-        assistant_id=ASSISTANT_ID
-    )
+        # HTMLコンテンツが長すぎる場合は制限する
+        if len(html_content) > 100000:  # 約100KB以上の場合
+            html_content = html_content[:100000] + "..."
 
-    # ステータス確認
-    while True:
-        run_status = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
-        if run_status.status == "completed":
-            break
-        time.sleep(5)
+        # OpenAI APIで構造化出力を使用してHTML解析
+        response = client.responses.create(
+            model="gpt-4o-mini",
+            input=f"システム指示: {prompt}\n\nURL: {url}\n\n以下のHTMLコンテンツを分析してください：\n\n{html_content}",
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "subsidy_extraction",
+                    "strict": True,
+                    "schema": get_subsidy_extraction_schema(),
+                }
+            },
+            temperature=0.1,
+        )
 
-    # 結果取得
-    messages = client.beta.threads.messages.list(thread_id=thread_id)
-    
-    # デバッグ: メッセージ全体を表示
-    print("\n===== メッセージ情報 =====")
-    print(f"メッセージ数: {len(messages.data)}")
-    
-    # 最新のメッセージの内容を取得（アシスタントからの応答）
-    assistant_messages = [msg for msg in messages.data if msg.role == "assistant"]
-    if not assistant_messages:
-        print("アシスタントからの応答がありません")
-        json_data = {}
-    else:
-        message_content = assistant_messages[0].content
-        
-        # デバッグ: メッセージ内容の詳細を表示
-        print("\n===== メッセージ内容 =====")
-        print(f"内容タイプ: {type(message_content)}")
-        print(f"内容: {message_content}")
-        
-        # テキスト内容を抽出
-        response_text = ""
-        for i, content_item in enumerate(message_content):
-            print(f"\n--- 内容アイテム {i+1} ---")
-            print(f"タイプ: {content_item.type}")
-            print(f"属性: {dir(content_item)}")
-            
-            if content_item.type == "text":
-                try:
-                    # 直接JSONとして解析を試みる
-                    text_value = content_item.text.value
-                    print(f"テキスト値: {text_value[:100]}...")  # 最初の100文字だけ表示
-                    
-                    # JSONの開始と終了を探す
-                    json_start = text_value.find('{')
-                    json_end = text_value.rfind('}') + 1
-                    
-                    if json_start >= 0 and json_end > json_start:
-                        response_text = text_value[json_start:json_end]
-                        print(f"抽出されたJSON: {response_text[:100]}...")
-                    else:
-                        response_text = text_value
-                except AttributeError as e:
-                    print(f"属性エラー: {e}")
-                    print(f"text属性の詳細: {dir(content_item.text)}")
-        
-        print("\n===== 抽出されたテキスト =====")
-        print(f"長さ: {len(response_text)}")
-        print(f"内容: {response_text[:200]}...")  # 最初の200文字だけ表示
-        
-        try:
-            json_data = json.loads(response_text)
-            print("\n===== パースされたJSON =====")
-            print(f"キー: {list(json_data.keys())}")
-        except json.JSONDecodeError as e:
-            print(f"\n===== JSONパースエラー =====")
-            print(f"エラー: {e}")
-            # JSONパースに失敗した場合、手動でJSONを構築
-            try:
-                # キーと値のペアを抽出する簡易的な方法
-                lines = response_text.split('\n')
-                json_data = {}
-                for line in lines:
-                    if ':' in line:
-                        parts = line.split(':', 1)
-                        key = parts[0].strip().strip('"')
-                        value = parts[1].strip().strip(',').strip('"')
-                        if key and value:
-                            json_data[key] = value
-                print(f"手動抽出したJSON: {json_data}")
-            except Exception as e:
-                print(f"手動JSON抽出エラー: {e}")
-                json_data = {}
+        # 構造化出力からJSONを取得
+        response_content = response.output[0].content[0].text
 
-    json_data["公式URL"] = url  # URLを追加
+        if response_content:
+            json_data = json.loads(response_content)
+        else:
+            raise ValueError("レスポンスが空です")
 
-    # **❗ "抽出結果" がある場合はスキップ**
-    if "抽出結果" in json_data and json_data["抽出結果"].strip():
-        log_error(url, json_data["抽出結果"])
+        print(f"✅ 構造化出力による解析完了: {url}")
+        print(f"制度名: {json_data.get('制度名', 'N/A')}")
+
+        # **❗ "抽出結果" がある場合はスキップ**
+        if "抽出結果" in json_data and json_data["抽出結果"].strip():
+            log_error(url, json_data["抽出結果"])
+            return None
+
+        # 抽出結果キーを削除（空でも）
+        if "抽出結果" in json_data:
+            del json_data["抽出結果"]
+
+        # JSON保存
+        os.makedirs(JSON_DIR, exist_ok=True)
+        # ファイル名をより識別しやすくする
+        timestamp = str(int(time.time()))
+        json_path = f"{JSON_DIR}/subsidy_{timestamp}.json"
+
+        with open(json_path, "w", encoding="utf-8") as file:
+            json.dump(json_data, file, ensure_ascii=False, indent=2)
+
+        print(f"💾 JSON保存完了: {json_path}")
+        return json_path
+
+    except Exception as e:
+        error_message = f"構造化出力による解析エラー: {str(e)}"
+        print(f"❌ {error_message}")
+        log_error(url, error_message)
         return None
-    
-    # 抽出結果キーを削除（空でも）
-    if "抽出結果" in json_data:
-        del json_data["抽出結果"]
 
-    # JSON保存
-    os.makedirs(JSON_DIR, exist_ok=True)
-    json_path = f"{JSON_DIR}/{file_id}.json"
-    with open(json_path, "w", encoding="utf-8") as file:
-        json.dump(json_data, file, ensure_ascii=False, indent=2)
 
-    return json_path
+# 従来のupload_file関数は不要になったため削除
+# HTMLファイルから直接コンテンツを読み込む関数を追加
+def process_html_file_with_openai(html_file_path, url):
+    """
+    HTMLファイルを読み込んで構造化出力で解析する
+
+    Args:
+        html_file_path (str): HTMLファイルのパス
+        url (str): 対象URL
+
+    Returns:
+        str: 保存されたJSONファイルのパス、エラー時はNone
+    """
+    try:
+        with open(html_file_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+
+        return process_with_openai(html_content, url)
+
+    except Exception as e:
+        error_message = f"HTMLファイル読み込みエラー: {str(e)}"
+        print(f"❌ {error_message}")
+        log_error(url, error_message)
+        return None
