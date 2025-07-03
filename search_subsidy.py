@@ -307,7 +307,8 @@ def search_subsidy_urls_detailed_prefecture(
                     all_urls.extend(query_data["URL"])
 
             print(f"✅ {city}: 完了")
-            break  # TODO kesu
+            if i >= 2:
+                break  # TODO kesu
 
         except Exception as e:
             print(f"❌ {city}: エラー - {e}")
@@ -385,6 +386,7 @@ def main():
     cities = get_cities_by_prefecture(prefecture)
     print(f"{prefecture}の市区町村数: {len(cities)}")
     search_subsidy_urls_detailed_prefecture(prefecture)
+    return prefecture
 
 
 if __name__ == "__main__":

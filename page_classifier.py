@@ -210,27 +210,7 @@ def classify_page_type(url):
                                     "required": ["title", "url"],
                                     "additionalProperties": False,
                                 },
-                                "description": "見つかった新築住宅建築関連補助金制度のタイトルとURL一覧（最大5個）",
-                            },
-                            "new_housing_subsidy_categories": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string",
-                                    "enum": [
-                                        "新築住宅建築",
-                                        "新築住宅取得",
-                                        "新築用土地取得",
-                                        "新築時住宅設備",
-                                        "新築住宅ローン利子補給",
-                                        "子育て世帯新築支援",
-                                        "新婚世帯新築支援",
-                                        "移住定住新築支援",
-                                        "省エネ新築住宅",
-                                        "認定新築住宅",
-                                        "その他新築関連",
-                                    ],
-                                },
-                                "description": "該当する新築住宅関連補助金のカテゴリ一覧",
+                                "description": "見つかった新築住宅建築関連補助金制度のタイトルとURL一覧（最大10個）",
                             },
                             "page_title": {
                                 "type": "string",
@@ -247,7 +227,6 @@ def classify_page_type(url):
                             "confidence",
                             "reasoning",
                             "found_new_housing_subsidies",
-                            "new_housing_subsidy_categories",
                             "page_title",
                             "main_content_summary",
                         ],
@@ -283,7 +262,6 @@ def classify_page_type(url):
             "confidence": 0.0,
             "reasoning": f"処理中にエラーが発生しました: {str(e)}",
             "found_new_housing_subsidies": [],
-            "new_housing_subsidy_categories": [],
             "page_title": "",
             "main_content_summary": "",
             "error": str(e),
@@ -417,10 +395,6 @@ def save_results_as_csv(results, output_csv_file):
                 row["見つかった補助金制度"] = ""
                 row["補助金制度URL"] = ""
 
-            # カテゴリを文字列として結合
-            categories = result.get("new_housing_subsidy_categories", [])
-            row["補助金カテゴリ"] = " | ".join(categories) if categories else ""
-
             csv_data.append(row)
 
         # DataFrameを作成してCSVに保存
@@ -470,7 +444,7 @@ def extract_individual_page_urls(results, base_json_file):
         print(f"個別ページ抽出エラー: {str(e)}")
 
 
-def main():
+def main(file_name=None):
     """メイン処理"""
     print("補助金ページ分類します。")
 
@@ -488,12 +462,16 @@ def main():
         print(f"{i}. {file}")
 
     try:
-        choice = int(input("\n分析するファイルの番号を選択してください: ")) - 1
-        if choice < 0 or choice >= len(json_files):
-            print("無効な選択です")
-            return
+        selected_file = None
+        if file_name:
+            selected_file = f"{file_name}_subsidy_urls_detailed.json"
+        else:
+            choice = int(input("\n分析するファイルの番号を選択してください: ")) - 1
+            if choice < 0 or choice >= len(json_files):
+                print("無効な選択です")
+                return
 
-        selected_file = json_files[choice]
+            selected_file = json_files[choice]
         print(f"\n{selected_file}を分析します...")
 
         # URLを分類
