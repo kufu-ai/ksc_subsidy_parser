@@ -11,6 +11,7 @@ pip install -r requirements.txt
 ```sh
 # OpenAI API設定
 OPENAI_API_KEY=your_openai_api_key_here
+# 不明
 OPENAI_ASSISTANT_ID=your_assistant_id_here
 
 # Tavily Search API設定
