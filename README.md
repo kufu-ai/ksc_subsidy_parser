@@ -18,6 +18,14 @@ OPENAI_ASSISTANT_ID=your_assistant_id_here
 TAVILY_API_KEY=your_tavily_api_key_here
 ```
 
+SPAでできているサイトからHTMLを取得するために`playwright`のインストールが必要です。
+```sh
+# pip install -r requirements.txt の中で
+# pip install playwright が済んでいるはずなので以下が実行できるはず
+playwright install
+
+```
+
 ## 使用方法
 
 ### 補助金に関するURLの一覧を取得・分類
