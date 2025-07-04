@@ -83,8 +83,41 @@ def main():
                     json.dump(merged_data, f, indent=2, ensure_ascii=False)
                 print(f"✅ 統合JSON: {prefecture}_all_classification.json")
 
-                # CSVファイルも作成
-                df_merged = pd.DataFrame(merged_data)
+                # CSVファイルも作成 - page_classifier.pyのカラム順序に合わせる
+                csv_data = []
+                for result in merged_data:
+                    # 補助金制度のタイトルとURLを文字列として結合
+                    subsidies = result.get("found_new_housing_subsidies", [])
+                    if subsidies:
+                        titles = [
+                            s.get("title", "") for s in subsidies if s.get("title")
+                        ]
+                        subsidy_urls = [
+                            s.get("url", "") for s in subsidies if s.get("url")
+                        ]
+                        found_subsidies = " | ".join(titles)
+                        subsidy_urls_str = " | ".join(subsidy_urls)
+                    else:
+                        found_subsidies = ""
+                        subsidy_urls_str = ""
+
+                    row = {
+                        "URL": result.get("url", ""),
+                        "都道府県": result.get("prefecture", ""),
+                        "市区町村": result.get("city", ""),
+                        "ページタイプ": result.get("page_type", ""),
+                        "対象ページ": result.get("is_target_page", ""),
+                        "確信度": result.get("confidence", 0.0),
+                        "判定理由": result.get("reasoning", ""),
+                        "ページタイトル": result.get("page_title", ""),
+                        "コンテンツ要約": result.get("main_content_summary", ""),
+                        "エラー": result.get("error", ""),
+                        "見つかった補助金制度": found_subsidies,
+                        "補助金制度URL": subsidy_urls_str,
+                    }
+                    csv_data.append(row)
+
+                df_merged = pd.DataFrame(csv_data)
                 csv_file = f"{prefecture}_all_classification.csv"
                 df_merged.to_csv(csv_file, index=False, encoding="utf-8")
                 print(f"✅ 統合CSV: {csv_file}")
@@ -99,8 +132,37 @@ def main():
                 json.dump(data, f, indent=2, ensure_ascii=False)
             print(f"✅ 統合JSON: {prefecture}_all_classification.json")
 
-            # csvを作る
-            pd_data = pd.DataFrame(data)
+            # csvを作る - page_classifier.pyのカラム順序に合わせる
+            csv_data = []
+            for result in data:
+                # 補助金制度のタイトルとURLを文字列として結合
+                subsidies = result.get("found_new_housing_subsidies", [])
+                if subsidies:
+                    titles = [s.get("title", "") for s in subsidies if s.get("title")]
+                    subsidy_urls = [s.get("url", "") for s in subsidies if s.get("url")]
+                    found_subsidies = " | ".join(titles)
+                    subsidy_urls_str = " | ".join(subsidy_urls)
+                else:
+                    found_subsidies = ""
+                    subsidy_urls_str = ""
+
+                row = {
+                    "URL": result.get("url", ""),
+                    "都道府県": result.get("prefecture", ""),
+                    "市区町村": result.get("city", ""),
+                    "ページタイプ": result.get("page_type", ""),
+                    "対象ページ": result.get("is_target_page", ""),
+                    "確信度": result.get("confidence", 0.0),
+                    "判定理由": result.get("reasoning", ""),
+                    "ページタイトル": result.get("page_title", ""),
+                    "コンテンツ要約": result.get("main_content_summary", ""),
+                    "エラー": result.get("error", ""),
+                    "見つかった補助金制度": found_subsidies,
+                    "補助金制度URL": subsidy_urls_str,
+                }
+                csv_data.append(row)
+
+            pd_data = pd.DataFrame(csv_data)
             csv_file = f"{prefecture}_all_classification.csv"
             pd_data.to_csv(csv_file, index=False, encoding="utf-8")
             print(f"✅ 統合CSV: {csv_file}")
