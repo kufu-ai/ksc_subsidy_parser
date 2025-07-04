@@ -11,6 +11,7 @@ def main():
     page_classifier.main(prefecture)
 
     # page_classification.jsonの中でpage_typeが補助金情報一覧ページのfound_new_housing_subsidiesを取得する
+    created_finalize_file = False
     with open(f"{prefecture}_page_classification.json", "r") as f:
         research_urls = {}
         data = json.load(f)
@@ -58,12 +59,16 @@ def main():
                 if any(query_data["URL"] for query_data in data)
             }
 
-            # 検索で発見していないURLをpage_classifierで分類する
-            print(f"一覧ページで発見したURLを分類します...")
-            classification_research = page_classifier.classify_urls_from_object(
-                ignore_already_find, prefecture
-            )
-            print(f"全てのURLを分類しました。")
+            classification_research = []
+            if ignore_already_find:
+                print(f"😮 検索で発見していないURLがあります。")
+                # 検索で発見していないURLをpage_classifierで分類する
+                print(f"一覧ページで発見したURLを分類します...")
+                classification_research = page_classifier.classify_urls_from_object(
+                    ignore_already_find, prefecture
+                )
+
+            print(f"✅ 全てのURLを分類しました。")
 
             # 結果をマージする
             if classification_research:
@@ -83,6 +88,22 @@ def main():
                 csv_file = f"{prefecture}_all_classification.csv"
                 df_merged.to_csv(csv_file, index=False, encoding="utf-8")
                 print(f"✅ 統合CSV: {csv_file}")
+
+                created_finalize_file = True
+    # 作成されていなかったら、既存のファイルをコピーして作成する
+    if not created_finalize_file:
+        with open(f"{prefecture}_page_classification.json", "r") as f:
+            data = json.load(f)
+            # jsonを作る
+            with open(f"{prefecture}_all_classification.json", "w") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            print(f"✅ 統合JSON: {prefecture}_all_classification.json")
+
+            # csvを作る
+            pd_data = pd.DataFrame(data)
+            csv_file = f"{prefecture}_all_classification.csv"
+            pd_data.to_csv(csv_file, index=False, encoding="utf-8")
+            print(f"✅ 統合CSV: {csv_file}")
 
 
 if __name__ == "__main__":
