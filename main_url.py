@@ -3,6 +3,7 @@ import page_classifier
 import json
 import os
 import merge_classification_results
+import pandas as pd
 
 
 def main():
@@ -67,10 +68,21 @@ def main():
             # 結果をマージする
             if classification_research:
                 print(f"分類結果をマージします...")
-                merge_classification_results.merge_both_classification_results(
-                    f"{prefecture}_page_classification.json",
-                    f"{prefecture}2_page_classification.json",
+                merged_data = merge_classification_results.merge_classification_results(
+                    data,
+                    classification_research,
                 )
+
+                # JSONファイルに保存
+                with open(f"{prefecture}_all_classification.json", "w") as f:
+                    json.dump(merged_data, f, indent=2, ensure_ascii=False)
+                print(f"✅ 統合JSON: {prefecture}_all_classification.json")
+
+                # CSVファイルも作成
+                df_merged = pd.DataFrame(merged_data)
+                csv_file = f"{prefecture}_all_classification.csv"
+                df_merged.to_csv(csv_file, index=False, encoding="utf-8")
+                print(f"✅ 統合CSV: {csv_file}")
 
 
 if __name__ == "__main__":

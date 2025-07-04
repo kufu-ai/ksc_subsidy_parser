@@ -76,6 +76,21 @@ def merge_classification_individual_results(original_results, extracted_results)
     }
 
 
+def merge_classification_results(array1, array2):
+    """
+    元の分類結果と抽出結果をマージ
+
+    Args:
+        original_results (list): 元の分類結果
+        extracted_results (list): 一覧ページから抽出した結果
+
+    Returns:
+        dict: マージされた結果
+    """
+    merged_array = array1 + array2
+    return merged_array
+
+
 def create_comprehensive_summary(merged_data):
     """
     包括的なサマリーを作成
@@ -342,14 +357,11 @@ def merge_both_classification_results(file_name1, file_name2):
             file1_result, file2_result
         )
 
-        # 包括的サマリーを作成
-        comprehensive_summary = create_comprehensive_summary(merged_data)
-
         # 結果を保存
         save_merged_results(merged_data, comprehensive_summary, base_name)
 
         print(f"\n🎉 マージ完了！")
-        print(f"📁 統合ページリスト: {base_name}_merged_individual_urls.txt")
+        print(f"📁 統合ページリスト: {base_name}_all_urls.txt")
 
     except KeyboardInterrupt:
         print("\n⚠️  処理が中断されました")
