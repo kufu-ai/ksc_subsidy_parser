@@ -289,7 +289,7 @@ def classify_urls_from_file(json_file_path):
         if "_" in json_file_path:
             prefecture = json_file_path.split("_")[0]
 
-        # 新しいJSON形式に対応: {市区町村名: [検索結果の配列]}
+        # {市区町村名: [検索結果の配列]}
         for city_name, search_results_list in data.items():
             print(f"\n{prefecture} {city_name} の分析開始...")
 
@@ -311,8 +311,8 @@ def classify_urls_from_file(json_file_path):
                         time.sleep(5)
 
                         # TODO: 必要なくなったら消す。3つまでテスト（デバッグ用）
-                        # if i >= 3:
-                        #     break
+                        if i >= 3:
+                            break
 
             # TODO: 必要なくなったら消す。1つの市区町村だけテスト（デバッグ用）
             break

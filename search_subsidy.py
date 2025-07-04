@@ -307,8 +307,7 @@ def search_subsidy_urls_detailed_prefecture(
                     all_urls.extend(query_data["URL"])
 
             print(f"✅ {city}: 完了")
-            if i >= 2:
-                break  # TODO kesu
+            break  # TODO kesu
 
         except Exception as e:
             print(f"❌ {city}: エラー - {e}")
