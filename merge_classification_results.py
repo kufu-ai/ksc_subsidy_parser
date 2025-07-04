@@ -261,7 +261,6 @@ def save_merged_results(merged_data, comprehensive_summary, base_filename):
     print(f"✅ 統計情報: {stats_file}")
 
     # 都道府県→市区町村→URLリスト（タイトル付き）形式のJSON出力
-    # TODO: 内容の要約時に使用するようにする。prefectureとcityが機械的に判断できるようになるのでAIによる間違えが起こらないくなる。
     # individual_pagesを都道府県・市区町村ごとにまとめる
     pref_city_dict = {}
     for page in individual_pages:
