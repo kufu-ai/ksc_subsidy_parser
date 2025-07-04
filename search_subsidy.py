@@ -4,6 +4,7 @@ import json
 from dotenv import load_dotenv
 from langchain_tavily import TavilySearch
 import time
+from utils import get_output_path
 
 # .envからAPIキーを読み込む
 load_dotenv()
@@ -332,7 +333,7 @@ def search_subsidy_urls_detailed_prefecture(
         safe_prefecture = prefecture.replace("/", "_").replace("\\", "_")
 
         # 1. 詳細JSONファイル保存
-        json_filename = f"{safe_prefecture}_subsidy_urls_detailed.json"
+        json_filename = get_output_path(f"{safe_prefecture}_subsidy_urls_detailed.json")
         try:
             with open(json_filename, "w", encoding="utf-8") as f:
                 json.dump(all_results, f, ensure_ascii=False, indent=2)
@@ -341,7 +342,7 @@ def search_subsidy_urls_detailed_prefecture(
             print(f"❌ JSON保存失敗: {e}")
 
         # 2. URLリストtxtファイル保存
-        txt_filename = f"{safe_prefecture}_all_urls.txt"
+        txt_filename = get_output_path(f"{safe_prefecture}_all_urls.txt")
         try:
             with open(txt_filename, "w", encoding="utf-8") as f:
                 for url in all_urls:
@@ -351,7 +352,9 @@ def search_subsidy_urls_detailed_prefecture(
             print(f"❌ txt保存失敗: {e}")
 
         # 4. 検索結果詳細CSV保存
-        csv_detailed_filename = f"{safe_prefecture}_search_results_detailed.csv"
+        csv_detailed_filename = get_output_path(
+            f"{safe_prefecture}_search_results_detailed.csv"
+        )
         try:
             csv_data = []
 

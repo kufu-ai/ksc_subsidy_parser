@@ -43,6 +43,8 @@ python main_url.py
 - `{都道府県名}_page_classification.json`: 初回検索結果の分類
 - `{都道府県名}2_subsidy_urls_detailed.json`: 一覧ページから抽出した個別URL
 
+**注意**: すべての出力ファイルは `data/output/` ディレクトリに保存されます。
+
 #### 出力される情報
 - ページタイプの判定結果
 - 判定の確信度（0.0-1.0）

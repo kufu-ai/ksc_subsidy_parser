@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 import re
+from utils import get_output_path, OUTPUT_DIR
 
 
 def merge_classification_individual_results(original_results, extracted_results):
@@ -175,21 +176,23 @@ def save_merged_results(merged_data, comprehensive_summary, base_filename):
     individual_pages = merged_data["merged_individual_pages"]
 
     # 1. 統合個別ページURLリスト（テキスト）
-    merged_urls_file = f"{base_filename}_merged_individual_urls.txt"
+    merged_urls_file = get_output_path(f"{base_filename}_merged_individual_urls.txt")
     with open(merged_urls_file, "w", encoding="utf-8") as f:
         for page in individual_pages:
             f.write(f"{page.get('url', '')}\n")
     print(f"✅ 統合URLリスト: {merged_urls_file} ({len(individual_pages)}件)")
 
     # 2. 詳細情報付きJSON
-    merged_detailed_file = f"{base_filename}_merged_individual_detailed.json"
+    merged_detailed_file = get_output_path(
+        f"{base_filename}_merged_individual_detailed.json"
+    )
     with open(merged_detailed_file, "w", encoding="utf-8") as f:
         json.dump(individual_pages, f, ensure_ascii=False, indent=2)
     print(f"✅ 統合詳細情報: {merged_detailed_file}")
 
     # 3. CSV形式
     df_merged = pd.DataFrame(individual_pages)
-    merged_csv_file = f"{base_filename}_merged_individual.csv"
+    merged_csv_file = get_output_path(f"{base_filename}_merged_individual.csv")
     df_merged.to_csv(merged_csv_file, index=False, encoding="utf-8")
     print(f"✅ 統合CSV: {merged_csv_file}")
 
@@ -240,7 +243,7 @@ def save_merged_results(merged_data, comprehensive_summary, base_filename):
             }
         )
 
-    summary_csv_file = f"{base_filename}_merged_summary.csv"
+    summary_csv_file = get_output_path(f"{base_filename}_merged_summary.csv")
     df_summary = pd.DataFrame(summary_data)
     df_summary.to_csv(summary_csv_file, index=False, encoding="utf-8")
     print(f"✅ 統合サマリー: {summary_csv_file}")
@@ -252,7 +255,7 @@ def save_merged_results(merged_data, comprehensive_summary, base_filename):
         "comprehensive_summary": comprehensive_summary,
     }
 
-    stats_file = f"{base_filename}_merged_stats.json"
+    stats_file = get_output_path(f"{base_filename}_merged_stats.json")
     with open(stats_file, "w", encoding="utf-8") as f:
         json.dump(stats_data, f, ensure_ascii=False, indent=2)
     print(f"✅ 統計情報: {stats_file}")
@@ -291,7 +294,7 @@ def save_merged_results(merged_data, comprehensive_summary, base_filename):
                 break
         if not found:
             pref_city_dict[pref].append({"city_name": city, "urls": urls})
-    city_urls_json_file = f"{base_filename}_merged_city_urls.json"
+    city_urls_json_file = get_output_path(f"{base_filename}_merged_city_urls.json")
     with open(city_urls_json_file, "w", encoding="utf-8") as f:
         json.dump(pref_city_dict, f, ensure_ascii=False, indent=2)
     print(f"✅ 都道府県→市区町村→URLリストJSON: {city_urls_json_file}")
@@ -303,13 +306,14 @@ def find_result_files():
     """
     files = {"classification": [], "extraction": []}
 
-    # 分類結果ファイル
+    # 分類結果ファイル（出力ディレクトリから検索）
+    output_path = Path(OUTPUT_DIR)
     for pattern in ["*_page_classification.json"]:
-        files["classification"].extend(Path(".").glob(pattern))
+        files["classification"].extend(output_path.glob(pattern))
 
-    # 抽出結果ファイル
+    # 抽出結果ファイル（出力ディレクトリから検索）
     for pattern in ["*_extracted_all.json"]:
-        files["extraction"].extend(Path(".").glob(pattern))
+        files["extraction"].extend(output_path.glob(pattern))
 
     return files
 
@@ -404,7 +408,7 @@ def main():
             return
 
         # 対応する抽出結果ファイルを検索
-        extraction_file = Path(f"{base_name}_extracted_all.json")
+        extraction_file = Path(get_output_path(f"{base_name}_extracted_all.json"))
 
         if extraction_file.exists():
             print(f"📂 {extraction_file.name} を読み込み中...")

@@ -5,7 +5,7 @@ import time
 from html_fetcher import fetch_html
 from openai_handler import client
 from config import API_KEY, JSON_DIR
-from utils import log_error
+from utils import log_error, get_output_path
 from datetime import date
 
 
@@ -279,7 +279,9 @@ def classify_urls_from_file(json_file_path):
         list: 分類結果のリスト
     """
     try:
-        with open(json_file_path, "r", encoding="utf-8") as f:
+        # 入力ファイルパスを出力ディレクトリから取得
+        input_path = get_output_path(json_file_path)
+        with open(input_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         results = []
@@ -375,14 +377,16 @@ def save_classification_results(results, output_json_file):
     """
     try:
         # 分類した結果を全てJSONで保存
-        with open(output_json_file, "w", encoding="utf-8") as f:
+        json_output_path = get_output_path(output_json_file)
+        with open(json_output_path, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
-        print(f"JSON保存完了: {output_json_file}")
+        print(f"JSON保存完了: {json_output_path}")
 
         # CSVファイルも作成
         output_csv_file = output_json_file.replace(".json", ".csv")
-        save_results_as_csv(results, output_csv_file)
-        print(f"CSV保存完了: {output_csv_file}")
+        csv_output_path = get_output_path(output_csv_file)
+        save_results_as_csv(results, csv_output_path)
+        print(f"CSV保存完了: {csv_output_path}")
 
         # 個別ページのURLのみを抽出
         extract_individual_page_urls(results, output_json_file)
@@ -465,8 +469,13 @@ def extract_individual_page_urls(results, base_json_file):
             return
 
         # 個別ページ用のファイル名を生成
-        individual_json = base_json_file.replace(".json", "_individual_pages.json")
-        individual_urls_txt = base_json_file.replace(".json", "_individual_urls.txt")
+        individual_json_name = base_json_file.replace(".json", "_individual_pages.json")
+        individual_urls_txt_name = base_json_file.replace(
+            ".json", "_individual_urls.txt"
+        )
+
+        individual_json = get_output_path(individual_json_name)
+        individual_urls_txt = get_output_path(individual_urls_txt_name)
 
         # 詳細情報付きで保存（JSON）
         with open(individual_json, "w", encoding="utf-8") as f:
@@ -489,10 +498,17 @@ def main(file_name=None):
     """メイン処理"""
     print("補助金ページ分類します。")
 
-    # 入力ファイルを選択
-    json_files = [
-        f for f in os.listdir(".") if f.endswith("_subsidy_urls_detailed.json")
-    ]
+    # 入力ファイルを選択（出力ディレクトリから検索）
+    from utils import OUTPUT_DIR
+
+    try:
+        json_files = [
+            f
+            for f in os.listdir(OUTPUT_DIR)
+            if f.endswith("_subsidy_urls_detailed.json")
+        ]
+    except FileNotFoundError:
+        json_files = []
 
     if not json_files:
         print("*_subsidy_urls_detailed.jsonファイルが見つかりません")

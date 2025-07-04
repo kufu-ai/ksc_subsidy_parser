@@ -4,6 +4,7 @@ import json
 import os
 import merge_classification_results
 import pandas as pd
+from utils import get_output_path
 
 
 def main():
@@ -12,7 +13,8 @@ def main():
 
     # page_classification.jsonの中でpage_typeが補助金情報一覧ページのfound_new_housing_subsidiesを取得する
     created_finalize_file = False
-    with open(f"{prefecture}_page_classification.json", "r") as f:
+    page_classification_path = get_output_path(f"{prefecture}_page_classification.json")
+    with open(page_classification_path, "r") as f:
         research_urls = {}
         data = json.load(f)
         for item in data:
@@ -32,13 +34,17 @@ def main():
                     ]
         if research_urls:
             # {prefecture}2_search_subsidy_urls_detailed.jsonにresearch_urlsを追加する
-            with open(f"{prefecture}2_subsidy_urls_detailed.json", "w") as f:
+            subsidy_urls_path = get_output_path(
+                f"{prefecture}2_subsidy_urls_detailed.json"
+            )
+            with open(subsidy_urls_path, "w") as f:
                 json.dump(research_urls, f, indent=2, ensure_ascii=False)
 
             ignore_already_find = research_urls.copy()
             # 一覧ページから取得したURLを再度page_classifierで分類する
             # 検索で発見済みのURLをチェック(*_all_urls.txt)して、同じURLがある場合はignore_already_findから除外する
-            with open(f"{prefecture}_all_urls.txt", "r") as f:
+            all_urls_path = get_output_path(f"{prefecture}_all_urls.txt")
+            with open(all_urls_path, "r") as f:
                 all_urls = [url.strip() for url in f.readlines()]
 
             # ignore_already_findの各市区町村のURL配列から、all_urlsに含まれるURLを削除する
@@ -79,9 +85,12 @@ def main():
                 )
 
                 # JSONファイルに保存
-                with open(f"{prefecture}_all_classification.json", "w") as f:
+                all_classification_json_path = get_output_path(
+                    f"{prefecture}_all_classification.json"
+                )
+                with open(all_classification_json_path, "w") as f:
                     json.dump(merged_data, f, indent=2, ensure_ascii=False)
-                print(f"✅ 統合JSON: {prefecture}_all_classification.json")
+                print(f"✅ 統合JSON: {all_classification_json_path}")
 
                 # CSVファイルも作成 - page_classifier.pyのカラム順序に合わせる
                 csv_data = []
@@ -118,19 +127,22 @@ def main():
                     csv_data.append(row)
 
                 df_merged = pd.DataFrame(csv_data)
-                csv_file = f"{prefecture}_all_classification.csv"
+                csv_file = get_output_path(f"{prefecture}_all_classification.csv")
                 df_merged.to_csv(csv_file, index=False, encoding="utf-8")
                 print(f"✅ 統合CSV: {csv_file}")
 
                 created_finalize_file = True
     # 作成されていなかったら、既存のファイルをコピーして作成する
     if not created_finalize_file:
-        with open(f"{prefecture}_page_classification.json", "r") as f:
+        with open(page_classification_path, "r") as f:
             data = json.load(f)
             # jsonを作る
-            with open(f"{prefecture}_all_classification.json", "w") as f:
+            all_classification_json_path = get_output_path(
+                f"{prefecture}_all_classification.json"
+            )
+            with open(all_classification_json_path, "w") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
-            print(f"✅ 統合JSON: {prefecture}_all_classification.json")
+            print(f"✅ 統合JSON: {all_classification_json_path}")
 
             # csvを作る - page_classifier.pyのカラム順序に合わせる
             csv_data = []
@@ -163,7 +175,7 @@ def main():
                 csv_data.append(row)
 
             pd_data = pd.DataFrame(csv_data)
-            csv_file = f"{prefecture}_all_classification.csv"
+            csv_file = get_output_path(f"{prefecture}_all_classification.csv")
             pd_data.to_csv(csv_file, index=False, encoding="utf-8")
             print(f"✅ 統合CSV: {csv_file}")
 

@@ -3,9 +3,24 @@ import datetime
 
 LOG_DIR = "logs/"
 ERROR_LOG_FILE = os.path.join(LOG_DIR, "error.log")
+OUTPUT_DIR = "data/output/"
 
-# ログディレクトリを作成
+# ディレクトリを作成
 os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+def ensure_output_dir():
+    """出力ディレクトリが存在することを確認し、なければ作成"""
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    return OUTPUT_DIR
+
+
+def get_output_path(filename):
+    """出力ファイルの完全パスを生成"""
+    ensure_output_dir()
+    return os.path.join(OUTPUT_DIR, filename)
+
 
 def log_error(url, message):
     """エラーログを記録"""
@@ -17,10 +32,12 @@ def log_error(url, message):
 
     print(f"⚠️ エラー記録: {message}")
 
+
 def load_prompt():
     """プロンプトをファイルから読み込む"""
     with open("prompts/prompt.txt", "r", encoding="utf-8") as file:
         return file.read()
+
 
 def load_urls():
     """URLリストをファイルから読み込む"""
