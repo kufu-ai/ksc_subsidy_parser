@@ -324,6 +324,47 @@ def classify_urls_from_file(json_file_path):
         return []
 
 
+def classify_urls_from_object(object_data, prefecture):
+    """
+    配列データからURLリストを読み込み、各URLを分類する
+
+    Args:
+        object_data (list): URLが保存されている配列データ
+
+    Returns:
+        list: 分類結果のリスト
+    """
+    try:
+        results = []
+
+        # {市区町村名: [検索結果の配列]}
+        for city_name, search_results_list in object_data.items():
+            print(f"\n{prefecture} {city_name} の分析開始...")
+
+            # 各市区町村の検索結果リストを処理
+            for search_result in search_results_list:
+                if isinstance(search_result, dict) and "URL" in search_result:
+                    urls = search_result.get("URL", [])
+
+                    for i, url in enumerate(urls, 1):
+                        print(f"  {i}/{len(urls)}: {url}")
+
+                        result = classify_page_type(url)
+                        result["prefecture"] = prefecture
+                        result["city"] = city_name
+
+                        results.append(result)
+
+                        # API負荷軽減のため待機
+                        time.sleep(5)
+
+        return results
+
+    except Exception as e:
+        print(f"エラー: {str(e)}")
+        return []
+
+
 def save_classification_results(results, output_json_file):
     """
     分類結果をJSONファイルとCSVファイルに保存する

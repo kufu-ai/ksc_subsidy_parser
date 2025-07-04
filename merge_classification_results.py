@@ -13,7 +13,7 @@ from datetime import datetime
 import re
 
 
-def merge_classification_results(original_results, extracted_results):
+def merge_classification_individual_results(original_results, extracted_results):
     """
     元の分類結果と抽出結果をマージ
 
@@ -311,6 +311,52 @@ def load_json_file(file_path):
         return []
 
 
+def merge_both_classification_results(file_name1, file_name2):
+    """
+    分類結果をマージする
+    """
+    print("🔗 分類結果マージツール")
+    print("-" * 40)
+
+    try:
+        base_name = file_name1.replace("_page_classification", "")
+
+        print(f"\n📂 {file_name1} を読み込み中...")
+        file1_result = load_json_file(str(file_name1))
+
+        if not file1_result:
+            print("❌ 分類結果が読み込めませんでした")
+            return
+
+        print(f"\n📂 {file_name2} を読み込み中...")
+        file2_result = load_json_file(str(file_name2))
+
+        if not file2_result:
+            print("❌ 分類結果が読み込めませんでした")
+            return
+
+        print(f"\n🔄 結果をマージ中...")
+
+        # 結果をマージ
+        merged_data = merge_classification_individual_results(
+            file1_result, file2_result
+        )
+
+        # 包括的サマリーを作成
+        comprehensive_summary = create_comprehensive_summary(merged_data)
+
+        # 結果を保存
+        save_merged_results(merged_data, comprehensive_summary, base_name)
+
+        print(f"\n🎉 マージ完了！")
+        print(f"📁 統合ページリスト: {base_name}_merged_individual_urls.txt")
+
+    except KeyboardInterrupt:
+        print("\n⚠️  処理が中断されました")
+    except Exception as e:
+        print(f"❌ 予期しないエラー: {str(e)}")
+
+
 def main():
     """
     メイン処理
@@ -360,7 +406,9 @@ def main():
         print(f"\n🔄 結果をマージ中...")
 
         # 結果をマージ
-        merged_data = merge_classification_results(original_results, extracted_results)
+        merged_data = merge_classification_individual_results(
+            original_results, extracted_results
+        )
 
         # 包括的サマリーを作成
         comprehensive_summary = create_comprehensive_summary(merged_data)

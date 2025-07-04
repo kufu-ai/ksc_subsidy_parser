@@ -33,11 +33,44 @@ def main():
             with open(f"{prefecture}2_subsidy_urls_detailed.json", "w") as f:
                 json.dump(research_urls, f, indent=2, ensure_ascii=False)
 
-            # 結果をマージする
-            merge_classification_results.main(f"{prefecture}2")
+            ignore_already_find = research_urls.copy()
+            # 一覧ページから取得したURLを再度page_classifierで分類する
+            # 検索で発見済みのURLをチェック(*_all_urls.txt)して、同じURLがある場合はignore_already_findから除外する
+            with open(f"{prefecture}_all_urls.txt", "r") as f:
+                all_urls = [url.strip() for url in f.readlines()]
 
-    # 一覧ページから取得したURLを再度page_classifierで分類する
-    page_classifier.main(f"{prefecture}2")
+            # ignore_already_findの各市区町村のURL配列から、all_urlsに含まれるURLを削除する
+            for city in ignore_already_find:
+                for query_data in ignore_already_find[city]:
+                    # URL配列から既存URLを削除
+                    original_urls = query_data["URL"]
+                    filtered_urls = [
+                        url for url in original_urls if url not in all_urls
+                    ]
+                    query_data["URL"] = filtered_urls
+                    query_data["URL数"] = len(filtered_urls)
+
+            # 空のURL配列を持つ市区町村は削除
+            ignore_already_find = {
+                city: data
+                for city, data in ignore_already_find.items()
+                if any(query_data["URL"] for query_data in data)
+            }
+
+            # 検索で発見していないURLをpage_classifierで分類する
+            print(f"一覧ページで発見したURLを分類します...")
+            classification_research = page_classifier.classify_urls_from_object(
+                ignore_already_find, prefecture
+            )
+            print(f"全てのURLを分類しました。")
+
+            # 結果をマージする
+            if classification_research:
+                print(f"分類結果をマージします...")
+                merge_classification_results.merge_both_classification_results(
+                    f"{prefecture}_page_classification.json",
+                    f"{prefecture}2_page_classification.json",
+                )
 
 
 if __name__ == "__main__":
