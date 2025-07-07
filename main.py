@@ -1,6 +1,7 @@
 import json
 import glob
 import os
+import re
 from html_fetcher import fetch_html
 from openai_handler import process_html_file_with_openai
 from csv_handler import save_to_csv
@@ -77,6 +78,64 @@ def select_prefecture():
             print("⚠️ 数字を入力してください。")
 
 
+def is_valid_url(url):
+    """URLの形式をチェック"""
+    url_pattern = re.compile(
+        r"^https?://"  # http:// or https://
+        r"(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|"  # domain...
+        r"localhost|"  # localhost...
+        r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"  # ...or ip
+        r"(?::\d+)?"  # optional port
+        r"(?:/?|[/?]\S+)$",
+        re.IGNORECASE,
+    )
+    return url_pattern.match(url) is not None
+
+
+def process_single_url():
+    """個別URLを入力して要約処理"""
+    print("\n🌐 個別URL要約処理")
+    print("=" * 50)
+
+    while True:
+        url = input("要約したいURLを入力してください: ").strip()
+
+        if not url:
+            print("⚠️ URLを入力してください。")
+            continue
+
+        if not is_valid_url(url):
+            print(
+                "⚠️ 有効なURL形式で入力してください（http://またはhttps://で始まる）。"
+            )
+            continue
+
+        break
+
+    print(f"\n🚀 {url} の解析を開始")
+
+    # URLからファイル名を生成（ドメイン名を使用）
+    try:
+        from urllib.parse import urlparse
+
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc.replace(".", "_")
+        filename = f"single_url_{domain}.html"
+    except:
+        filename = "single_url.html"
+
+    html_path = fetch_html(url, filename)
+    json_path = process_html_file_with_openai(html_path, url)
+
+    # **❗ JSONデータがない場合はスキップ**
+    if json_path is None:
+        print(f"⚠️ {url} のデータが取得できませんでした。")
+        return
+
+    save_to_csv(json_path)
+    print(f"✅ {url} の解析が完了しました！\n")
+
+
 def process_classification_pages():
     """*_all_classification.jsonファイルから住宅関連個別ページのURLを抽出・処理"""
     # 都道府県を選択
@@ -148,10 +207,11 @@ def main():
     print("=" * 50)
     print("1. 既存URLリスト（urls.txt）の処理")
     print("2. 分類済み住宅関連個別ページの処理")
+    print("3. 個別URL要約処理")
     print("=" * 50)
 
     while True:
-        choice = input("処理を選択してください (1 または 2): ").strip()
+        choice = input("処理を選択してください (1, 2, または 3): ").strip()
 
         if choice == "1":
             process_existing_urls()
@@ -159,8 +219,11 @@ def main():
         elif choice == "2":
             process_classification_pages()
             break
+        elif choice == "3":
+            process_single_url()
+            break
         else:
-            print("⚠️ 1 または 2 を入力してください。")
+            print("⚠️ 1, 2, または 3 を入力してください。")
 
     print("\n🎉 処理が完了しました！")
 
