@@ -50,7 +50,7 @@ python main_url.py
 - `{都道府県名}_all_classification.json`: 全ての分類結果（JSON形式）
 - `{都道府県名}_all_classification.csv`: 全ての分類結果（CSV形式）
 - `{都道府県名}_page_classification.json`: 初回検索結果の分類
-- `{都道府県名}2_subsidy_urls_detailed.json`: 一覧ページから抽出した個別URL
+- `{都道府県名}2_subsidy_urls_detailed.json`: 一覧ページから抽出したURLの分類結果
 
 **注意**: すべての出力ファイルは `data/output/` ディレクトリに保存されます。
 
@@ -88,3 +88,5 @@ main_url.pyで実行した
 
 ** 3 **
 ターミナル上で入力したURLの要約を実施します。
+
+要約されたデータは`data/subsidy_data.csv`に出力されます。
